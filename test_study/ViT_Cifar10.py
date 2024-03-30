@@ -8,17 +8,30 @@ import torchvision.transforms as tfs
 from torch.utils.data import DataLoader
 from timm.models.layers import trunc_normal_
 from torchvision.datasets.cifar import CIFAR10
+# timm 라이브러리는 "PyTorch Image Models"의 약자
+# Ross Wightman에 의해 작성된 PyTorch 기반의 이미지 분류 모델 라이브러리
 
+"""
+- epoch : 50 
+- batch_size : 128
+- init learning rate : 0.001
+- optimizer : Adam(weight_decay : 5e-5)
+- model : ViT(img_size=32, patch_size=4, in_chans=3, num_classes=10, embed_dim=192, depth=12,
+                 num_heads=12, mlp_ratio=2., qkv_bias=False, drop_rate=0., attn_drop_rate=0.)
+- loss : cross entropy
+- dataset : cifar10 (torchvision.data)
+- data augmentation : random crop, horizontal random flip
+"""
 
 class EmbeddingLayer(nn.Module):
     def __init__(self, in_chans, embed_dim, img_size, patch_size):
         super().__init__()
-        self.num_tokens = (img_size // patch_size) ** 2
+        self.num_tokens = (img_size // patch_size) ** 2 # patch 크기=4x4, image 크기=32x32 이면 64개의 패치
         self.embed_dim = embed_dim
         self.project = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        self.num_tokens += 1
+        self.num_tokens += 1 # xclass를 추가 (BERT 논문에서 사용된 class token)
         self.pos_embed = nn.Parameter(torch.zeros(1, self.num_tokens, self.embed_dim))
 
         # init cls token and pos_embed -> refer timm vision transformer
