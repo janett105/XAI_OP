@@ -25,7 +25,7 @@ def train(model, train_loader, optimizer, criterion, epoch, DEVICE):
         loss.backward()
         optimizer.step()
     
-def evaluate(model, valtest_loader, criterion, mode, DEVICE, BATCH_SIZE, CLASSES):
+def evaluate(model, valtest_loader, criterion, DEVICE, BATCH_SIZE, CLASSES, mode):
     model.eval()
     valtest_loss = 0.0
     correct = 0

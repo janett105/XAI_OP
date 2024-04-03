@@ -2,8 +2,11 @@ import torch.nn as nn
 
 '''
 input layer(BATCH_SIZE(BS), N_IN_CHANNEL, IMAGE_DIM, IMAGE_DIM)
+BS = 3
+IMAGE_DIM = 224
+transforms.Normalize([0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
-conv1 : (BS, 3, 227, 227) -> (BS, 96, 55, 55)
+conv1 : (BS, 3, 224, 224) -> (BS, 96, 55, 55)
 ReLU
 Maxpool1 : (BS, 96, 55, 55) -> (BS, 96, 27, 27)
 Norm1
@@ -31,38 +34,38 @@ class AlexNet(nn.Module):
         super(AlexNet, self).__init__()
 
         self.net = nn.Sequential(
-            nn.Conv2d(in_channels=N_IN_CHANNELS, out_channels=96, kernel_size=11, stride=4),
+            nn.Conv2d(in_channels=N_IN_CHANNELS, out_channels=64, kernel_size=3, stride=2, padding=1),
             nn.ReLU(), # inplace=True를 사용하면 gradient계산 전에(loss.backward) loss값이 inplace돼서 오류
-            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.MaxPool2d(kernel_size=2),
             nn.LocalResponseNorm(size=5, alpha=0.0001, beta=0.75, k=2),
 
-            nn.Conv2d(96, 256, kernel_size=5, padding=2),
+            nn.Conv2d(64, 192, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=3, stride=2), 
+            nn.MaxPool2d(kernel_size=2), 
             nn.LocalResponseNorm(size=5, alpha=0.0001, beta=0.75, k=2),
 
-            nn.Conv2d(256, 384, kernel_size=3, padding=1),
+            nn.Conv2d(192, 384, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.Conv2d(384, 256, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.Conv2d(256, 256, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=3, stride=2)
+            nn.MaxPool2d(kernel_size=2)
         )
 
         self.classifier = nn.Sequential(
-            nn.Dropout(p=0.5, ),
-            nn.Linear(256 * 6 * 6, 4096),
+            nn.Dropout(p=0.5),
+            nn.Linear(256 * 2 * 2, 4096),
             nn.ReLU(),
 
-            nn.Dropout(p=0.5, ),
+            nn.Dropout(p=0.5),
             nn.Linear(4096, 4096),
             nn.ReLU(),
 
             nn.Linear(4096, N_CLASSES),
         )
 
-        # self.init_bias()
+    #     self.init_bias()
 
     # def init_bias(self):
     #     for layer in self.net:
@@ -77,5 +80,5 @@ class AlexNet(nn.Module):
 
     def forward(self, x):
         x = self.net(x)
-        x = x.view(x.size(0), 256 * 6 * 6) 
+        x = x.view(x.size(0), 256 * 2 * 2) 
         return self.classifier(x)

@@ -4,12 +4,13 @@ import torch.backends.cudnn as cudnn
 import torchvision
 from torchvision import transforms as transforms
 import numpy as np
-from torchvision import models
-
+# from torchvision import models
+from torchvision.models import resnet50, ResNet50_Weights
+import torch.nn as nn
 import argparse
 
-from models import *
-from misc import progress_bar
+# from models import *
+# from scikitmisc import progress_bar
 
 def main():
     parser = argparse.ArgumentParser(description="cifar-10 with PyTorch")
@@ -26,6 +27,9 @@ def main():
 
 class Solver(object):
     def __init__(self, config):
+        self.device = None
+        self.weights = ResNet50_Weights.DEFAULT
+        #self.weights = None
         self.model = None
         self.lr = config.lr
         self.epochs = config.epoch
@@ -34,17 +38,20 @@ class Solver(object):
         self.criterion = None
         self.optimizer = None
         self.scheduler = None
-        self.device = None
         self.cuda = config.cuda
         self.train_loader = None
         self.test_loader = None
 
     def load_data(self):
-        train_transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.ToTensor()])
-        test_transform = transforms.Compose([transforms.ToTensor()])
-        train_set = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=train_transform)
+        if self.weights == None:
+            train_transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.ToTensor()])
+            test_transform = transforms.Compose([transforms.ToTensor()])
+        else:
+            train_transform = transforms.Compose([self.weights.transforms()])
+            test_transform = transforms.Compose([self.weights.transforms()])
+        train_set = torchvision.datasets.CIFAR10(root='./data/train', train=True, download=True, transform=train_transform)
         self.train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=self.train_batch_size, shuffle=True)
-        test_set = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=test_transform)
+        test_set = torchvision.datasets.CIFAR10(root='./data/test', train=False, download=True, transform=test_transform)
         self.test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=self.test_batch_size, shuffle=False)
 
     def load_model(self):
@@ -54,6 +61,7 @@ class Solver(object):
         else:
             self.device = torch.device('cpu')
 
+        self.model = resnet50(weights=self.weights).to(self.device)
         # self.model = LeNet().to(self.device)
         # self.model = AlexNet().to(self.device)
         # self.model = VGG11().to(self.device)
@@ -63,14 +71,13 @@ class Solver(object):
         # self.model = GoogLeNet().to(self.device)
         # self.model = resnet18().to(self.device)
         # self.model = resnet34().to(self.device)
-        self.model = models.resnet50().to(self.device)
         # self.model = resnet101().to(self.device)
         # self.model = resnet152().to(self.device)
-        self.model = models.densenet121.to(self.device)
+        # self.model = models.densenet121.to(self.device)
         # self.model = DenseNet161().to(self.device)
         # self.model = DenseNet169().to(self.device)
         # self.model = DenseNet201().to(self.device)
-        self.model = WideResNet(depth=28, num_classes=10).to(self.device)
+        # self.model = WideResNet(depth=28, num_classes=10).to(self.device)
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
         self.scheduler = optim.lr_scheduler.MultiStepLR(self.optimizer, milestones=[75, 150], gamma=0.5)
@@ -97,8 +104,8 @@ class Solver(object):
             # train_correct incremented by one if predicted right
             train_correct += np.sum(prediction[1].cpu().numpy() == target.cpu().numpy())
 
-            progress_bar(batch_num, len(self.train_loader), 'Loss: %.4f | Acc: %.3f%% (%d/%d)'
-                         % (train_loss / (batch_num + 1), 100. * train_correct / total, train_correct, total))
+            # progress_bar(batch_num, len(self.train_loader), 'Loss: %.4f | Acc: %.3f%% (%d/%d)'
+            #              % (train_loss / (batch_num + 1), 100. * train_correct / total, train_correct, total))
 
         return train_loss, train_correct / total
 
@@ -119,8 +126,8 @@ class Solver(object):
                 total += target.size(0)
                 test_correct += np.sum(prediction[1].cpu().numpy() == target.cpu().numpy())
 
-                progress_bar(batch_num, len(self.test_loader), 'Loss: %.4f | Acc: %.3f%% (%d/%d)'
-                             % (test_loss / (batch_num + 1), 100. * test_correct / total, test_correct, total))
+                # progress_bar(batch_num, len(self.test_loader), 'Loss: %.4f | Acc: %.3f%% (%d/%d)'
+                #              % (test_loss / (batch_num + 1), 100. * test_correct / total, test_correct, total))
 
         return test_loss, test_correct / total
 
@@ -135,13 +142,13 @@ class Solver(object):
         accuracy = 0
         for epoch in range(1, self.epochs + 1):
             self.scheduler.step(epoch)
-            print("\n===> epoch: %d/200" % epoch)
+            print(f"\n===> epoch:{epoch}/{self.epochs}")
             train_result = self.train()
             print(train_result)
             test_result = self.test()
             accuracy = max(accuracy, test_result[1])
             if epoch == self.epochs:
-                print("===> BEST ACC. PERFORMANCE: %.3f%%" % (accuracy * 100))
+                print(f"===> BEST ACC. PERFORMANCE: {accuracy * 100:.3f}")
                 self.save()
 
 

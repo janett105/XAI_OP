@@ -8,8 +8,8 @@ from sklearn.model_selection import StratifiedKFold
 import pandas as pd
 from codes.train_evaluate_test import train, evaluate
 from codes.datasets import data_loaders, data_sets, split_train_val
-from models.AlexNet import AlexNet
-
+# from models.AlexNet import AlexNet
+from torchvision.models import resnet50, ResNet50_Weights
 
 DEVICE = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 print(f"Device: {DEVICE}")
@@ -24,7 +24,7 @@ LR_DECAY = 0.0001
 LR_INIT = 0.01
 
 BATCH_SIZE = 100 # 500개 batch
-IMAGE_DIM = 227 # pixels
+IMAGE_DIM = 224 # pixels
 N_LABELS = 10
 N_IN_CHANNELS=3 #RGB
 N_CLASSES = 10
@@ -43,9 +43,10 @@ if __name__ == '__main__':
 
     for fold, (train_idx, val_idx) in enumerate(skf.split(range(len(data_sets['train_val'])), data_sets['train_val'].targets)):
         print(f"======================={fold+1} fold=======================")
+        print("train set size", len(train_idx), len(val_idx))
         split_train_val(train_idx, val_idx)
 
-        model = AlexNet(N_IN_CHANNELS, N_CLASSES).to(DEVICE)
+        model = resnet50(weights=ResNet50_Weights.DEFAULT).to(DEVICE)
         #model = torch.nn.parallel.DataParallel(model, device_ids=DEVICE_IDS)
         print('Model created')
 
@@ -75,7 +76,7 @@ if __name__ == '__main__':
             lr_scheduler.step()
         print(f"Finished Training & Validation")
 
-        best_model=AlexNet(N_IN_CHANNELS, N_CLASSES).to(DEVICE)
+        best_model=resnet50().to(DEVICE)
         best_model.load_state_dict(torch.load(f'models/best_{MODEL_NAME}_{fold}Fold.pth'))
 
         test_loss, test_acc = evaluate(model, data_loaders['test'], criterion, DEVICE, BATCH_SIZE, CLASSES, mode='test')
