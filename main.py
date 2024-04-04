@@ -21,8 +21,8 @@ def main():
     parser = argparse.ArgumentParser(description="cifar-10 with PyTorch")
     parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
     parser.add_argument('--epoch', default=200, type=int, help='number of epochs tp train for')
-    parser.add_argument('--trainBatchSize', default=100, type=int, help='training batch size')
-    parser.add_argument('--testBatchSize', default=100, type=int, help='testing batch size')
+    parser.add_argument('--trainBatchSize', default=32, type=int, help='training batch size') # 16, 32, 64
+    parser.add_argument('--testBatchSize', default=32, type=int, help='testing batch size')
     parser.add_argument('--cuda', default=torch.cuda.is_available(), type=bool, help='whether cuda is in use')
     parser.add_argument('--n_folds', default=10, type=int, help='the number of folds in stratified k fold')
     parser.add_argument('--model', default=resnet50, help='model')
@@ -124,7 +124,7 @@ class Solver(object):
         else:valtest_loader = self.data_loaders['test']
         with torch.no_grad():
             for _, (data_batch, labels) in enumerate(valtest_loader):
-                data, labels = data.to(self.device), labels.to(self.device)
+                data_batch, labels = data_batch.to(self.device), labels.to(self.device)
                 outputs = self.model(data_batch)
                 
                 valtest_loss += self.criterion(outputs, labels).item()
@@ -152,7 +152,6 @@ class Solver(object):
             self.split_train_val(train_idx, val_idx)
             best_val_acc = 0.0
             for epoch in range(1, self.epochs+1):
-                self.scheduler.step(epoch)
                 print(f"\n===> epoch:{epoch}/{self.epochs}")
                 train_loss, train_acc = self.train()
                 print(f"train result : {train_loss, train_acc}")
@@ -161,6 +160,7 @@ class Solver(object):
                 if best_val_acc < val_acc:
                     self.save_model_state(fold)
                     best_val_acc = val_acc
+                self.scheduler.step(epoch)
             print(f"===> {fold}Fold BEST VAL_ACC: {best_val_acc * 100:.3f}")
             test_loss, test_acc = self.test(fold)
             print(f"===> {fold}Fold TEST_ACC: {test_acc * 100:.3f}")
