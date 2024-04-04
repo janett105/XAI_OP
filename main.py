@@ -24,6 +24,7 @@ def main():
     parser.add_argument('--trainBatchSize', default=100, type=int, help='training batch size')
     parser.add_argument('--testBatchSize', default=100, type=int, help='testing batch size')
     parser.add_argument('--cuda', default=torch.cuda.is_available(), type=bool, help='whether cuda is in use')
+    parser.add_argument('--n_folds', default=10, type=int, help='the number of folds in stratified k fold')
     parser.add_argument('--model', default=resnet50, help='model')
     parser.add_argument('--weights', default=ResNet50_Weights.DEFAULT, help='pretrained model weights')
     args = parser.parse_args()
@@ -40,9 +41,9 @@ class Solver(object):
         self.train_batch_size = config.trainBatchSize
         self.test_batch_size = config.testBatchSize
         self.lr = config.lr
-        self.criterion = nn.CrossEntropyLoss().to(self.device)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
-        self.scheduler = optim.lr_scheduler.MultiStepLR(self.optimizer, milestones=[75, 150], gamma=0.5)
+        self.criterion = None
+        self.optimizer = None
+        self.scheduler = None
         self.cuda = config.cuda
         self.data_loaders = None
         self.data_sets = None
@@ -77,6 +78,9 @@ class Solver(object):
 
         self.model = self.model(weights=self.weights).to(self.device)
         #model = torch.nn.parallel.DataParallel(model, device_ids=DEVICE_IDS)
+        self.criterion = nn.CrossEntropyLoss().to(self.device)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
+        self.scheduler = optim.lr_scheduler.MultiStepLR(self.optimizer, milestones=[75, 150], gamma=0.5)
     
     def split_train_val(self, train_idx, val_idx):
         train_subset = Subset(self.data_sets['train_val'], train_idx)
@@ -96,7 +100,7 @@ class Solver(object):
         train_loss=0.0
         train_correct = 0
         total=0
-        for _, (data_batch, labels) in enumerate(self.train_loader):
+        for _, (data_batch, labels) in enumerate(self.data_loaders['train']):
             data_batch, labels = data_batch.to(self.device), labels.to(self.device)
             self.optimizer.zero_grad() # parameter gradients 0으로 초기화
             outputs = self.model(data_batch)
@@ -138,7 +142,7 @@ class Solver(object):
     def test(self, fold):
         best_model=self.model().to(self.device)
         best_model.load_state_dict(torch.load(f'models/resnet/{fold}Fold.pth'))
-        return evaluate(best_model, mode='test')
+        return self.evaluate(best_model, mode='test')
 
     def run(self):
         self.load_data()
@@ -150,9 +154,9 @@ class Solver(object):
             for epoch in range(1, self.epochs+1):
                 self.scheduler.step(epoch)
                 print(f"\n===> epoch:{epoch}/{self.epochs}")
-                train_loss, train_acc = train()
+                train_loss, train_acc = self.train()
                 print(f"train result : {train_loss, train_acc}")
-                val_loss, val_acc = evaluate(mode='val')
+                val_loss, val_acc = self.evaluate(mode='val')
                 print(f"val result : {val_loss, val_acc}")
                 if best_val_acc < val_acc:
                     self.save_model_state(fold)
