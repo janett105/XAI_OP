@@ -1,6 +1,6 @@
 import torch
 import torchvision
-from codes.Vizualization import imageshow
+from tutorial.Vizualization import imageshow
 
 def train(model, train_loader, optimizer, criterion, epoch, DEVICE):
     model.train()
