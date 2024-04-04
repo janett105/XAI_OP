@@ -14,23 +14,29 @@ from torch.utils.data import DataLoader, Subset
 import copy
 import argparse
 import numpy as np
+import sys
+import visdom #python -m visdom.server
 
-from torchvision.models import resnet50, ResNet50_Weights
+from torchvision.models import resnet50, ResNet50_Weights # pretrain :  ImageNet
 
 def main():
+    sys.stdout = open('logs.txt', 'w')
+
     parser = argparse.ArgumentParser(description="cifar-10 with PyTorch")
     parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
-    parser.add_argument('--epoch', default=200, type=int, help='number of epochs tp train for')
+    parser.add_argument('--epoch', default=5, type=int, help='number of epochs tp train for')
     parser.add_argument('--trainBatchSize', default=32, type=int, help='training batch size') # 16, 32, 64
     parser.add_argument('--testBatchSize', default=32, type=int, help='testing batch size')
     parser.add_argument('--cuda', default=torch.cuda.is_available(), type=bool, help='whether cuda is in use')
-    parser.add_argument('--n_folds', default=10, type=int, help='the number of folds in stratified k fold')
+    parser.add_argument('--n_folds', default=3, type=int, help='the number of folds in stratified k fold')
     parser.add_argument('--model', default=resnet50, help='model')
     parser.add_argument('--weights', default=ResNet50_Weights.DEFAULT, help='pretrained model weights')
     args = parser.parse_args()
 
     solver = Solver(args)
     solver.run()
+
+    # sys.stdout.close()
 
 class Solver(object):
     def __init__(self, config):
@@ -135,13 +141,13 @@ class Solver(object):
         return valtest_loss, valtest_correct / total
     
     def save_model_state(self, fold):
-        path = f"models/resnet/{fold}Fold.pth"
+        path = f"results/resnet/{fold}Fold.pth"
         torch.save(self.model.state_dict(), path)
         print("Checkpoint saved to {}".format(path))
 
     def test(self, fold):
         best_model=self.model().to(self.device)
-        best_model.load_state_dict(torch.load(f'models/resnet/{fold}Fold.pth'))
+        best_model.load_state_dict(torch.load(f'results/resnet/{fold}Fold.pth'))
         return self.evaluate(best_model, mode='test')
 
     def run(self):
