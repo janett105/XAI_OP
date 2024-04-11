@@ -8,9 +8,13 @@ import torch.optim as optim
 from sklearn.model_selection import StratifiedKFold
 import pandas as pd
 import torchvision
-from torchvision import transforms
+import torchvision.transforms as transforms
+import torchvision.datasets as datasets
+from torch.utils.data import Dataset, DataLoader
 from tutorial.train_evaluate_test import train, evaluate
 from torch.utils.data import DataLoader, Subset
+from PIL import Image
+import pandas as pd
 import copy
 import argparse
 import numpy as np
@@ -18,27 +22,30 @@ import sys
 import visdom #python -m visdom.server
 import os
 
-from torchvision.models import resnet50, ResNet50_Weights # pretrain :  ImageNet
+from torchvision.models import vit_b_16, ViT_B_16_Weights # pretrain : IMAGENET1K_V1
+
+DATA_DIR = './data/Shoulder_X-rayDB/DB_X-ray'
+
 
 def main():
-    sys.stdout = open('logs.txt', 'w')
+    #sys.stdout = open('logs.txt', 'w')
 
-    parser = argparse.ArgumentParser(description="cifar-10 with PyTorch")
+    parser = argparse.ArgumentParser(description="shoulder x-ray")
     parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
     parser.add_argument('--epoch', default=5, type=int, help='number of epochs tp train for')
     parser.add_argument('--trainBatchSize', default=32, type=int, help='training batch size') # 16, 32, 64
     parser.add_argument('--testBatchSize', default=32, type=int, help='testing batch size')
     parser.add_argument('--cuda', default=torch.cuda.is_available(), type=bool, help='whether cuda is in use')
     parser.add_argument('--n_folds', default=10, type=int, help='the number of folds in stratified k fold')
-    parser.add_argument('--model', default=resnet50, help='model')
-    parser.add_argument('--weights', default=ResNet50_Weights.DEFAULT, help='pretrained model weights')
+    parser.add_argument('--model', default=vit_b_16, help='model')
+    parser.add_argument('--weights', default=ViT_B_16_Weights.DEFAULT, help='pretrained model weights')
     args = parser.parse_args()
 
     solver = Solver(args)
     solver.run()
 
-    sys.stdout.close()
-
+    #sys.stdout.close()
+    
 class Solver(object):
     def __init__(self, config):
         self.device = None
@@ -67,15 +74,19 @@ class Solver(object):
     
     def load_data(self):
         self.data_transforms = {
-            "train" : transforms.Compose([self.weights.transforms(),
-                                          transforms.RandomHorizontalFlip()]),
-            'val' : transforms.Compose([self.weights.transforms()]),
-            'test' : transforms.Compose([self.weights.transforms()])
+            'train' : transforms.Compose([self.weights.transforms(),
+                                          transforms.RandomHorizontalFlip(),]),
+            'val' : transforms.Compose([self.weights.transforms(),]),
+            'test' : transforms.Compose([self.weights.transforms(),])
         }
+        
         self.data_sets={
-            #datasets.ImageFolder(root=os.path.join(DATA_DIR, datasets_type), transform=data_transforms[datasets_type]) 
-            'train_val':torchvision.datasets.CIFAR10(root='./data/train_val', train=True, transform=None, download=True),
-            'test':torchvision.datasets.CIFAR10(root='./data/test', train=False, transform=self.data_transforms['test'], download=True)
+            'train_val': datasets.ImageFolder(
+                root=os.path.join(DATA_DIR, 'train_val')
+                ),
+            'test': datasets.ImageFolder(
+                root=os.path.join(DATA_DIR, 'test')
+                , transform=self.data_transforms['test']) 
         }
         self.data_loaders = {'train': [],
                 'val': [],
@@ -104,13 +115,13 @@ class Solver(object):
         val_subset.dataset = copy.deepcopy(self.data_sets['train_val'])
         val_subset.dataset.transform = self.data_transforms['val']
 
-        # pin memory: DRAM을 거치지 않고 GPU 전용 메모리（VRAM）에 데이터를 로드
+        # pin_memory: DRAM을 거치지 않고 GPU 전용 메모리（VRAM）에 데이터를 로드
         # drop_last: batch의 크기에 따른 의존도 높은 함수를 사용할 때 걱정이 되는 경우 마지막 batch를 사용하지 않기
         # num_workers: 데이터 로딩에 사용하는 subprocess개수（멀티프로세싱）
         self.data_loaders['train'] = DataLoader(train_subset, batch_size=self.train_batch_size,shuffle=True,pin_memory=True,drop_last=False, num_workers=4)
         self.data_loaders['val'] = DataLoader(val_subset, batch_size=self.train_batch_size,shuffle=False, pin_memory=True,drop_last=False, num_workers=4)
-    
-    def train(self):
+     
+    def train(self,fold):
         print("training..")
         self.model.train()
         train_loss=0.0
@@ -134,23 +145,38 @@ class Solver(object):
         train_acc = train_correct / total   
         
         # Loss와 Accuracy를 Visdom에 기록
-        self.vis.line(X=np.array([self.current_epoch]), 
-                      Y=np.array([train_loss]), 
-                      update='append',
-                      win='train_loss',
-                      opts=dict(title='Train Loss',
-                                xlabel='Epoch',
-                                ylabel='Loss'))
-        self.loss_win = 'train_loss'  # win이 생성되었다고 표시
-
-        self.vis.line(X=np.array([self.current_epoch]), 
-                      Y=np.array([train_acc]), 
-                      update='append',
-                      win='train_loss',
-                      opts=dict(title='Train Accuracy', 
-                                xlabel='Epoch', 
-                                ylabel='Accuracy'))
-        self.acc_win = 'train_acc'  # win이 생성되었다고 표시 
+        # 에포크 번호와 훈련 손실을 기반으로 점을 그립니다.
+        # X 배열은 [에포크 번호, 손실 값] 형태의 2열을 가져야 합니다.
+        x_val = np.array([self.current_epoch])
+        y_val = np.array([train_loss])
+        X = np.column_stack((x_val, y_val))
+        
+        if self.loss_win is None:
+            self.loss_win = self.vis.scatter(X=X,
+                                             opts=dict(title='Train Loss',
+                                                       xlabel='Epoch',
+                                                       ylabel='Loss',
+                                                       legend=['Train Loss']))
+        else:
+            self.vis.scatter(X=X,
+                     win=self.loss_win,
+                     update='append')
+            
+        x_val = np.array([self.current_epoch])
+        y_val = np.array([train_acc])
+        Y = np.column_stack((x_val, y_val))
+        if self.acc_win is None:
+            self.acc_win = self.vis.scatter(X=Y,
+                                             opts=dict(title='Train Accuracy',
+                                                       xlabel='Epoch',
+                                                       ylabel='Accuracy',
+                                                       legend=['Train Accuracy']))
+        else:
+            self.vis.scatter(X=Y,
+                     win=self.acc_win,
+                     update='append')
+            
+        
             
         return train_loss / len(self.data_loaders['train']), train_correct / total
 
@@ -180,16 +206,16 @@ class Solver(object):
         return valtest_loss / len(valtest_loader), valtest_correct / total
     
     def save_model_state(self, fold):
-        directory = f"results/resnet"
+        directory = f"results/densenet121"
         if not os.path.exists(directory):
             os.makedirs(directory)  # 디렉토리가 없다면 생성
-        path = f"{directory}/{fold}Fold.pth"
+        path = f"{directory}/{fold+1}Fold.txt"
         torch.save(self.model.state_dict(), path)
         print("Checkpoint saved to {}".format(path))
 
     def test(self, fold):
         #self.model은 이미 모델의 인스턴스니까 () 필요 없음        
-        self.model.load_state_dict(torch.load(f'results/resnet/{fold}Fold.pth'))
+        self.model.load_state_dict(torch.load(f'results/densenet121/{fold+1}Fold.txt'))
         test_loss, test_acc = self.evaluate(mode='test')  # 모델을 평가
         return test_loss, test_acc
 
@@ -203,7 +229,7 @@ class Solver(object):
             for epoch in range(1, self.epochs+1):
                 self.current_epoch = epoch  # 현재 에포크 저장
                 print(f"\n===> epoch:{epoch}/{self.epochs}")
-                train_loss, train_acc = self.train()
+                train_loss, train_acc = self.train(fold)
                 print(f"train result : {train_loss, train_acc}")
                 val_loss, val_acc = self.evaluate(mode='val')
                 print(f"val result : {val_loss, val_acc}")
