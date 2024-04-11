@@ -28,7 +28,7 @@ DATA_DIR = './data/Shoulder_X-rayDB/DB_X-ray'
 
 
 def main():
-    #sys.stdout = open('logs.txt', 'w')
+    #sys.stdout = open('logs.pth', 'w')
 
     parser = argparse.ArgumentParser(description="shoulder x-ray")
     parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
@@ -209,13 +209,13 @@ class Solver(object):
         directory = f"results/densenet121"
         if not os.path.exists(directory):
             os.makedirs(directory)  # 디렉토리가 없다면 생성
-        path = f"{directory}/{fold+1}Fold.txt"
+        path = f"{directory}/{fold+1}Fold.pth"
         torch.save(self.model.state_dict(), path)
         print("Checkpoint saved to {}".format(path))
 
     def test(self, fold):
         #self.model은 이미 모델의 인스턴스니까 () 필요 없음        
-        self.model.load_state_dict(torch.load(f'results/densenet121/{fold+1}Fold.txt'))
+        self.model.load_state_dict(torch.load(f'results/densenet121/{fold+1}Fold.pth'))
         test_loss, test_acc = self.evaluate(mode='test')  # 모델을 평가
         return test_loss, test_acc
 
