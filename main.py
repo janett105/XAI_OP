@@ -206,7 +206,7 @@ class Solver(object):
         return valtest_loss / len(valtest_loader), valtest_correct / total
     
     def save_model_state(self, fold):
-        directory = f"results/densenet121"
+        directory = f"results/vit_b_16"
         if not os.path.exists(directory):
             os.makedirs(directory)  # 디렉토리가 없다면 생성
         path = f"{directory}/{fold+1}Fold.pth"
@@ -215,7 +215,7 @@ class Solver(object):
 
     def test(self, fold):
         #self.model은 이미 모델의 인스턴스니까 () 필요 없음        
-        self.model.load_state_dict(torch.load(f'results/densenet121/{fold+1}Fold.pth'))
+        self.model.load_state_dict(torch.load(f'results/vit_b_16/{fold+1}Fold.pth'))
         test_loss, test_acc = self.evaluate(mode='test')  # 모델을 평가
         return test_loss, test_acc
 
