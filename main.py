@@ -18,20 +18,35 @@ import sys
 import visdom #python -m visdom.server
 import os
 
-from torchvision.models import resnet50, ResNet50_Weights # pretrain :  ImageNet
+#from torchvision.models import resnet50, ResNet50_Weights # pretrain :  ImageNet
+"""
+mae pretraining : based on chest X-ray MAE study
+    masking 비율 90%
+    random resize crop : 0.5~1.0, center/random masking
+    center/random masking
 
+proxy pretraining : 
+
+
+fine tuning : based on chest X-ray MAE study
+    lr : 1.5e-4/1.5e-5/1.5e-6
+    lr schedulat : cosine annealing strategy
+    optimizer : AdamW (beta1=0.9, beta2=0.95)
+    layer-wise LR decay : 0.55
+    RandAug magnitude : 6
+    DropPath rate : 0.2
+    n_epoch : 75 
+"""
 def main():
-    sys.stdout = open('logs.txt', 'w')
+    sys.stdout = open('results/logs.txt', 'w')
 
-    parser = argparse.ArgumentParser(description="cifar-10 with PyTorch")
-    parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
-    parser.add_argument('--epoch', default=5, type=int, help='number of epochs tp train for')
+    parser = argparse.ArgumentParser(description="CNN/ViT X-ray classification")
+    parser.add_argument('--lr', default=1.5e-4, type=float, help='learning rate')
+    parser.add_argument('--epoch', default=75, type=int, help='number of epochs tp train for')
     parser.add_argument('--trainBatchSize', default=16, type=int, help='training batch size') # 16, 32, 64
     parser.add_argument('--testBatchSize', default=16, type=int, help='testing batch size')
-    parser.add_argument('--cuda', default=torch.cuda.is_available(), type=bool, help='whether cuda is in use')
     parser.add_argument('--n_folds', default=10, type=int, help='the number of folds in stratified k fold')
-    parser.add_argument('--model', default=resnet50, help='model')
-    parser.add_argument('--weights', default=ResNet50_Weights.DEFAULT, help='pretrained model weights')
+    parser.add_argument('--model', default='cnn', type=str, help='model')
     args = parser.parse_args()
 
     solver = Solver(args)
@@ -51,7 +66,7 @@ class Solver(object):
         self.criterion = None
         self.optimizer = None
         self.scheduler = None
-        self.cuda = config.cuda
+        self.cuda = torch.cuda.is_available()
         self.data_loaders = None
         self.data_sets = None
         self.data_transforms = None
@@ -82,12 +97,36 @@ class Solver(object):
             cudnn.benchmark = True
         else: self.device = torch.device('cpu')
         print(f"device : {self.device}")
+        
+        if self.model=='cnn':
+            self.model = torch.load('models/densenet121_CXR_0.3M_mae.pth').to(self.device)
+            print('densenet151 : MAE(chest X-ray)')
+        elif self.model=='vit':
+            self.model = torch.load('models/vit-s_CXR_0.3M_mae.pth').to(self.device)
+            print('ViT-small : MAE(chest X-ray)')
+        elif self.model=='cnn_proxy':
 
-        self.model = self.model(weights=self.weights).to(self.device)
-        #model = torch.nn.parallel.DataParallel(model, device_ids=DEVICE_IDS)
+            print('densenet151 : MAE(chest X-ray) -> rot_proxy(shoulder X-ray)')
+        elif self.model=='vit_proxy':
+
+            print('ViT-small : MAE(chest X-ray) -> rot_proxy(shoulder X-ray)')
+        elif self.model=='cnn_rnd_mae':
+
+            print('densenet151 : MAE(chest X-ray) -> MAE(shoulder X-ray, random masking/crop)')
+        elif self.model=='vit_rnd_mae':
+
+            print('ViT-small : MAE(chest X-ray) -> MAE(shoulder X-ray, random masking/crop)')
+        elif self.model=='cnn_cnt_mae':
+
+            print('densenet151 : MAE(chest X-ray) -> MAE(shoulder X-ray, center masking/crop)')
+        elif self.model=='vit_cnt_mae':
+
+            print('ViT-small : MAE(chest X-ray) -> MAE(shoulder X-ray, center masking/crop)')
+        
+        print(f'Learning Rate : {self.lr}')
         self.criterion = nn.CrossEntropyLoss().to(self.device)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
-        self.scheduler = optim.lr_scheduler.MultiStepLR(self.optimizer, milestones=[75, 150], gamma=0.5)
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.lr, betas=(0.9, 0.95))
+        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer)
     
     def split_train_val(self, train_idx, val_idx):
         train_subset = Subset(self.data_sets['train_val'], train_idx)
@@ -161,6 +200,8 @@ class Solver(object):
         return test_loss, test_acc
 
     def run(self):
+        print(f'<finetuning for {self.n_folds} folds & {self.epochs} epochs>')
+
         self.load_data()
         self.load_model()
         for fold, (train_idx, val_idx) in enumerate(self.skf.split(range(len(self.data_sets['train_val'])), self.data_sets['train_val'].targets)):
