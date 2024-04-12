@@ -16,6 +16,7 @@ import argparse
 import numpy as np
 import sys
 import visdom #python -m visdom.server
+import os
 
 from torchvision.models import resnet50, ResNet50_Weights # pretrain :  ImageNet
 
@@ -25,10 +26,10 @@ def main():
     parser = argparse.ArgumentParser(description="cifar-10 with PyTorch")
     parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
     parser.add_argument('--epoch', default=5, type=int, help='number of epochs tp train for')
-    parser.add_argument('--trainBatchSize', default=32, type=int, help='training batch size') # 16, 32, 64
-    parser.add_argument('--testBatchSize', default=32, type=int, help='testing batch size')
+    parser.add_argument('--trainBatchSize', default=16, type=int, help='training batch size') # 16, 32, 64
+    parser.add_argument('--testBatchSize', default=16, type=int, help='testing batch size')
     parser.add_argument('--cuda', default=torch.cuda.is_available(), type=bool, help='whether cuda is in use')
-    parser.add_argument('--n_folds', default=3, type=int, help='the number of folds in stratified k fold')
+    parser.add_argument('--n_folds', default=10, type=int, help='the number of folds in stratified k fold')
     parser.add_argument('--model', default=resnet50, help='model')
     parser.add_argument('--weights', default=ResNet50_Weights.DEFAULT, help='pretrained model weights')
     args = parser.parse_args()
@@ -36,7 +37,7 @@ def main():
     solver = Solver(args)
     solver.run()
 
-    # sys.stdout.close()
+    sys.stdout.close()
 
 class Solver(object):
     def __init__(self, config):
@@ -97,6 +98,9 @@ class Solver(object):
         val_subset.dataset = copy.deepcopy(self.data_sets['train_val'])
         val_subset.dataset.transform = self.data_transforms['val']
 
+        # pin memory: DRAM을 거치지 않고 GPU 전용 메모리（VRAM）에 데이터를 로드
+        # drop_last: batch의 크기에 따른 의존도 높은 함수를 사용할 때 걱정이 되는 경우 마지막 batch를 사용하지 않기
+        # num_workers: 데이터 로딩에 사용하는 subprocess개수（멀티프로세싱）
         self.data_loaders['train'] = DataLoader(train_subset, batch_size=self.train_batch_size,shuffle=True,pin_memory=True,drop_last=False, num_workers=4)
         self.data_loaders['val'] = DataLoader(val_subset, batch_size=self.train_batch_size,shuffle=False, pin_memory=True,drop_last=False, num_workers=4)
     
@@ -115,10 +119,11 @@ class Solver(object):
             self.optimizer.step()
 
             train_loss += loss.item()
+            # 모델의 예측값 중 가장 높은 값을 가지는 인덱스를 구함
             prediction = torch.max(outputs, 1)  # second param "1" represents the dimension to be reduced
             total += labels.size(0)
             train_correct += np.sum(prediction[1].cpu().numpy() == labels.cpu().numpy())# train_correct incremented by one if predicted right
-        return train_loss, train_correct / total
+        return train_loss / len(self.data_loaders['train']), train_correct / total
 
     def evaluate(self, mode):
         print("testing..")
@@ -137,18 +142,23 @@ class Solver(object):
                 prediction = torch.max(outputs, 1)
                 total += labels.size(0)
                 valtest_correct += np.sum(prediction[1].cpu().numpy() == labels.cpu().numpy())
-
-        return valtest_loss, valtest_correct / total
+                
+        # len(valtest_loader)로 나눔
+        return valtest_loss / len(valtest_loader), valtest_correct / total
     
     def save_model_state(self, fold):
-        path = f"results/resnet/{fold}Fold.pth"
+        directory = f"results/resnet"
+        if not os.path.exists(directory):
+            os.makedirs(directory)  # 디렉토리가 없다면 생성
+        path = f"{directory}/{fold}Fold.pth"
         torch.save(self.model.state_dict(), path)
         print("Checkpoint saved to {}".format(path))
 
     def test(self, fold):
-        best_model=self.model().to(self.device)
-        best_model.load_state_dict(torch.load(f'results/resnet/{fold}Fold.pth'))
-        return self.evaluate(best_model, mode='test')
+        #self.model은 이미 모델의 인스턴스니까 () 필요 없음        
+        self.model.load_state_dict(torch.load(f'results/resnet/{fold}Fold.pth'))
+        test_loss, test_acc = self.evaluate(mode='test')  # 모델을 평가
+        return test_loss, test_acc
 
     def run(self):
         self.load_data()
@@ -166,7 +176,7 @@ class Solver(object):
                 if best_val_acc < val_acc:
                     self.save_model_state(fold)
                     best_val_acc = val_acc
-                self.scheduler.step(epoch)
+                self.scheduler.step() # PyTorch의 더 깨끗하고 직관적인 API 사용을 장려하기 위해 torch.optim.lr_scheduler의 사용법이 변경되어 epoch 삭제
             print(f"===> {fold}Fold BEST VAL_ACC: {best_val_acc * 100:.3f}")
             test_loss, test_acc = self.test(fold)
             print(f"===> {fold}Fold TEST_ACC: {test_acc * 100:.3f}")
