@@ -145,7 +145,7 @@ def computeAUROC(dataGT, dataPRED, classCount):
     # print(dataGT.shape, dataPRED.shape)
     for i in range(classCount):
         try:
-            outAUROC.append(roc_auc_score(dataGT[:, i], dataPRED[:, i]))
+            outAUROC.append(roc_auc_score(dataGT, dataPRED[:, i]))
         except:
             outAUROC.append(0.)
     print(outAUROC)

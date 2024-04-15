@@ -45,10 +45,10 @@ from collections import OrderedDict
 
 def get_args_parser():
     parser = argparse.ArgumentParser('MAE fine-tuning for image classification', add_help=False)
-    parser.add_argument('--batch_size', default=128, type=int,
+    parser.add_argument('--batch_size', default=8, type=int,
                         help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
-    parser.add_argument('--epochs', default=2, type=int)
-    parser.add_argument('--accum_iter', default=1, type=int,
+    parser.add_argument('--epochs', default=75, type=int)
+    parser.add_argument('--accum_iter', default=4, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
@@ -58,7 +58,7 @@ def get_args_parser():
     parser.add_argument('--input_size', default=224, type=int,
                         help='images input size')
 
-    parser.add_argument('--drop_path', type=float, default=0.2, metavar='PCT',
+    parser.add_argument('--drop_path', type=float, default=0, metavar='PCT',
                         help='Drop path rate (default: 0.1)')
 
     # Optimizer parameters
@@ -69,15 +69,15 @@ def get_args_parser():
 
     parser.add_argument('--lr', type=float, default=None, metavar='LR',
                         help='learning rate (absolute lr)')
-    parser.add_argument('--blr', type=float, default=1e-3, metavar='LR',
+    parser.add_argument('--blr', type=float, default=2.5e-4, metavar='LR',
                         help='base learning rate: absolute_lr = base_lr * total_batch_size / 256')
     parser.add_argument('--layer_decay', type=float, default=0.55,
                         help='layer-wise lr decay from ELECTRA/BEiT')
 
-    parser.add_argument('--min_lr', type=float, default=1e-6, metavar='LR',
+    parser.add_argument('--min_lr', type=float, default=1e-5, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0')
 
-    parser.add_argument('--warmup_epochs', type=int, default=5, metavar='N',
+    parser.add_argument('--warmup_epochs', type=int, default=0, metavar='N',
                         help='epochs to warmup LR')
 
     # Augmentation parameters
@@ -89,7 +89,7 @@ def get_args_parser():
                         help='Label smoothing (default: 0.1)')
 
     # * Random Erase params
-    parser.add_argument('--reprob', type=float, default=0.25, metavar='PCT',
+    parser.add_argument('--reprob', type=float, default=0, metavar='PCT',
                         help='Random erase prob (default: 0.25)')
     parser.add_argument('--remode', type=str, default='pixel',
                         help='Random erase mode (default: "pixel")')
@@ -130,7 +130,9 @@ def get_args_parser():
                         help='path where to save, empty for no saving')
     parser.add_argument('--log_dir', default='results/densenet121',
                         help='path where to tensorboard log')
-    parser.add_argument('--device', default='cuda',
+    parser.add_argument('--device', action='store_false', 
+                        default=False,
+                        # default=torch.cuda.is_available(),
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='',
@@ -138,11 +140,11 @@ def get_args_parser():
 
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
-    parser.add_argument('--eval', action='store_true',default=False,
+    parser.add_argument('--eval', action='store_true',
                         help='Perform evaluation only')
     parser.add_argument('--dist_eval', action='store_false', default=False,
                         help='Enabling distributed evaluation (recommended during training for faster monitor')
-    parser.add_argument('--num_workers', default=4, type=int)
+    parser.add_argument('--num_workers', default=2, type=int)
     parser.add_argument('--pin_mem', action='store_true',
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
@@ -191,7 +193,10 @@ def main(args):
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
     print("{}".format(args).replace(', ', ',\n'))
 
-    device = torch.device(args.device)
+    if args.device:
+        device = torch.device('cuda')
+        cudnn.benchmark = True
+    else: device = torch.device('cpu')
     print(f"device : {device}")
 
     # fix the seed for reproducibility
@@ -269,6 +274,7 @@ def main(args):
         drop_last=False
     )
 
+
     mixup_fn = None
     mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
     if mixup_active:
@@ -290,8 +296,17 @@ def main(args):
         model = models.__dict__[args.model](num_classes=args.nb_classes)
     else:
         raise NotImplementedError
-
-
+    
+    # original_conv = model.features.conv0
+    # new_conv = torch.nn.Conv2d(1, original_conv.out_channels,
+    #                      kernel_size=original_conv.kernel_size, 
+    #                      stride=original_conv.stride, 
+    #                      padding=original_conv.padding, 
+    #                      bias=original_conv.bias)
+    # with torch.no_grad():
+    #     new_conv.weight[:] = torch.mean(original_conv.weight, dim=1, keepdim=True)
+    # model.features.conv0 = new_conv
+    
     if args.finetune and not args.eval:
         if 'vit' in args.model:
             checkpoint = torch.load(args.finetune, map_location='cpu')
@@ -308,8 +323,6 @@ def main(args):
                         print(f"Shape of {k} doesn't match with {state_dict[k]}")
                 else:
                     print(f"{k} not found in Init Model")
-
-
 
             # interpolate position embedding
             # model의 input size/구조가 달라졌을 때 필요
@@ -380,7 +393,7 @@ def main(args):
             layer_decay=args.layer_decay
         )
     else:
-        param_groups = optim_factory.param_groups_layer_decay(model_without_ddp, args.weight_decay)
+        param_groups = optim_factory.param_groups_weight_decay(model_without_ddp, args.weight_decay)
 
     if args.optimizer == 'adamw':
         optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
