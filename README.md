@@ -23,3 +23,31 @@ torchvision 0.15.2
 ### 참고 자료
 Transfer Learning for Computer Vision Tutorial
 https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
+
+
+set SAVE_DIR=results/densenet121/
+set DATASET_DIR=data/DB_X-ray/
+python ./code/finetune_shoulderxray.py ^
+--output_dir %SAVE_DIR% ^
+--log_dir %SAVE_DIR% ^
+--batch_size 8 ^
+--accum_iter 4 ^
+--finetune "models/densenet121_CXR_0.3M_mae.pth" ^
+--checkpoint_type "smp_encoder" ^
+--epochs 1 ^
+--input_size 1000 ^
+--blr 2.5e-4 --weight_decay 0.05 ^
+--model "densenet121" ^
+--drop_path 0 --mixup 0 --cutmix 0 --reprob 0 --vit_dropout_rate 0 ^
+--data_path %DATASET_DIR% ^
+--num_workers 2 ^
+--nb_classes 2 ^
+--min_lr 1e-5 ^
+--build_timm_transform ^
+--aa "rand-m6-mstd0.5-inc1" ^
+--repeated_aug^
+
+--warmup_epochs 5 ^
+--eval_interval 10 ^
+![Uploading image.png…]()
+
