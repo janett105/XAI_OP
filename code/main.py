@@ -30,7 +30,7 @@ proxy pretraining :
 
 fine tuning : based on chest X-ray MAE study
     lr : 1.5e-4/1.5e-5/1.5e-6
-    lr schedulat : cosine annealing strategy
+    lr schedular : cosine annealing strategy
     optimizer : AdamW (beta1=0.9, beta2=0.95)
     layer-wise LR decay : 0.55
     RandAug magnitude : 6
@@ -76,20 +76,22 @@ class Solver(object):
     
     def load_data(self):
         self.data_transforms = {
-            "train" : transforms.Compose([self.weights.transforms(),
-                                          transforms.RandomHorizontalFlip()]),
-            'val' : transforms.Compose([self.weights.transforms()]),
-            'test' : transforms.Compose([self.weights.transforms()])
+            "train" : transforms.Compose([transforms.RandAugment(magnitude=6)]),
+            'val' : transforms.Compose([]),
+            'test' : transforms.Compose([])
         }
         self.data_sets={
-            #datasets.ImageFolder(root=os.path.join(DATA_DIR, datasets_type), transform=data_transforms[datasets_type]) 
-            'train_val':torchvision.datasets.CIFAR10(root='./data/train_val', train=True, transform=None, download=True),
-            'test':torchvision.datasets.CIFAR10(root='./data/test', train=False, transform=self.data_transforms['test'], download=True)
+            'train':torchvision.datasets.ImageFolder(root='data/DB_X-ray/train_to', transform=self.data_transforms['train']),
+            'val':torchvision.datasets.ImageFolder(root='data/DB_X-ray/val_to', transform=self.data_transforms['val']),
+            'test':torchvision.datasets.ImageFolder(root='data/DB_X-ray/test_to', transform=self.data_transforms['test']) 
+            # 'train_val':torchvision.datasets.CIFAR10(root='./data/train_val', train=True, transform=None, download=True),
+            # 'test':torchvision.datasets.CIFAR10(root='./data/test', train=False, transform=self.data_transforms['test'], download=True)
         }
-        self.data_loaders = {'train': [],
-                'val': [],
-                'test': DataLoader(self.data_sets['test'], batch_size=self.test_batch_size, shuffle=False,num_workers=4)
-        }
+        self.data_loaders = {
+                            'train': DataLoader(self.data_sets['train'], batch_size=self.train_batch_size, shuffle=True,num_workers=4),
+                            'val': DataLoader(self.data_sets['val'], batch_size=self.test_batch_size, shuffle=False,num_workers=4),
+                            'test': DataLoader(self.data_sets['test'], batch_size=self.test_batch_size, shuffle=False,num_workers=4)
+                            }
 
     def load_model(self):
         if self.cuda:
