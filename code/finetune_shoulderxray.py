@@ -192,6 +192,7 @@ def main(args):
     print("{}".format(args).replace(', ', ',\n'))
 
     device = torch.device(args.device)
+    print(f"device : {device}")
 
     # fix the seed for reproducibility
     seed = args.seed + misc.get_rank()
@@ -418,15 +419,9 @@ def main(args):
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
     if args.eval:
-        if args.dataset == 'chestxray'| args.dataset == 'covidx'|args.dataset == 'node21'|args.dataset == 'chexpert':
-            test_stats = evaluate_chestxray(data_loader_test, model, device, args)
-            print(f"Average AUC of the network on the test set images: {test_stats['auc_avg']:.4f}")
-            if args.dataset == 'covidx':
-                print(f"Accuracy of the network on the {len(dataset_test)} test images: {test_stats['acc1']:.1f}%")
-        elif args.dataset == 'shoulderxray':
-            test_stats = evaluate_shoulderxray(data_loader_test, model, device, args)
-            print(f"Average AUC of the network on the test set images: {test_stats['auc_avg']:.4f}")
-            print(f"Accuracy of the network on the test set images: {test_stats['acc1']:.4f}")
+        test_stats = evaluate_shoulderxray(data_loader_test, model, device, args)
+        print(f"Average AUC of the network on the test set images: {test_stats['auc_avg']:.4f}")
+        print(f"Accuracy of the network on the test set images: {test_stats['acc1']:.4f}")
         exit(0)
 
     print(f"Start training for {args.epochs} epochs")
@@ -459,6 +454,7 @@ def main(args):
 
             if max_accuracy < val_stats['acc1']:
                 max_accuracy = val_stats['acc1']
+                save_model_state(model)
 
             if log_writer is not None:
                 log_writer.add_scalar('perf/auc_avg', val_stats['auc_avg'], epoch)

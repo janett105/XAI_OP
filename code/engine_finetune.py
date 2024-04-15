@@ -185,7 +185,7 @@ def evaluate_shoulderxray(data_loader, model, device, args):
         # compute output
         with torch.cuda.amp.autocast():
             output = model(images)
-            target = target.unsqueeze(1)
+            #target = target.unsqueeze(1)
             loss = criterion(output, target)
         outputs.append(output)
         targets.append(target)
