@@ -1,7 +1,0 @@
-{"train_lr": 3.053573787818737e-06, 
-"train_loss": 0.7144519323590158, 
-"val_loss": 0.7047314453125, 
-"val_acc1": 48.46938775510204, 
-"val_auc_avg": NaN,
- "val_auc_each_class": [0.0, 0.0], 
- "epoch": 0, "n_parameters": 6955906}

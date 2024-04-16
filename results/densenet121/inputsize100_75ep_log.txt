@@ -1,0 +1,18 @@
+{"train_lr": 3.053573787818737e-06, "train_loss": 0.692429915584367, "val_loss": 0.6945402979850769, "val_acc1": 48.46938775510204, "val_auc_avg": 0.4159979155810318, "val_auc_each_class": 0.4159979155810318, "epoch": 0, "n_parameters": 6954881}
+{"train_lr": 3.0928416342759706e-05, "train_loss": 0.6704546682450964, "val_loss": 0.7232052898406982, "val_acc1": 48.46938775510204, "val_auc_avg": 0.5367899947889525, "val_auc_each_class": 0.5367899947889525, "epoch": 10, "n_parameters": 6954881}
+{"train_lr": 2.878403179262182e-05, "train_loss": 0.6363425371290623, "val_loss": 0.6450294244289398, "val_acc1": 48.46938775510204, "val_auc_avg": 0.7280354351224596, "val_auc_each_class": 0.7280354351224596, "epoch": 20, "n_parameters": 6954881}
+{"train_lr": 2.5023650931996866e-05, "train_loss": 0.6288903093543546, "val_loss": 0.6744699853658677, "val_acc1": 48.46938775510204, "val_auc_avg": 0.6989056800416885, "val_auc_each_class": 0.6989056800416885, "epoch": 30, "n_parameters": 6954881}
+{"train_lr": 2.039206330837652e-05, "train_loss": 0.5977277351521898, "val_loss": 0.6028619074821472, "val_acc1": 48.46938775510204, "val_auc_avg": 0.7337675872850442, "val_auc_each_class": 0.7337675872850442, "epoch": 40, "n_parameters": 6954881}
+{"train_lr": 1.5806611653313225e-05, "train_loss": 0.6021521672092635, "val_loss": 0.592772154211998, "val_acc1": 48.46938775510204, "val_auc_avg": 0.7494528400208442, "val_auc_each_class": 0.7494528400208442, "epoch": 50, "n_parameters": 6954881}
+{"train_lr": 1.2175500903966276e-05, "train_loss": 0.590712478277327, "val_loss": 0.603708044886589, "val_acc1": 48.46938775510204, "val_auc_avg": 0.7594580510682647, "val_auc_each_class": 0.7594580510682647, "epoch": 60, "n_parameters": 6954881}
+{"train_lr": 1.0217917076894775e-05, "train_loss": 0.5725795982897967, "val_loss": 0.6704640918970108, "val_acc1": 48.46938775510204, "val_auc_avg": 0.7167795726941115, "val_auc_each_class": 0.7167795726941115, "epoch": 70, "n_parameters": 6954881}
+{"train_lr": 1.0003690361231064e-05, "train_loss": 0.5727672325126056, "val_loss": 0.6434871304035187, "val_acc1": 48.46938775510204, "val_auc_avg": 0.7241271495570609, "val_auc_each_class": 0.7241271495570609, "epoch": 74, "n_parameters": 6954881}
+{"test_lr": 1.0003690361231064e-05, "test_loss": 0.5727672325126056, "n_parameters": 6954881}
+Test: Total time: 0:00:10 (0.3970 s / it)
+total targets shape : (207, 1)
+total outputs shape : (207, 1)
+Loss 0.453
+* Acc@1 42.029
+Average AUC on the test set images: 0.8636
+Accuracy of the network on test images: 42.0%
+Training time 0:55:48

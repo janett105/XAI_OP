@@ -432,7 +432,7 @@ def main(args):
 
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
-    max_accuracy = 0.0
+    max_auc_accuracy = 0.0
     max_auc = 0.0
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
@@ -456,10 +456,7 @@ def main(args):
 
             if max_auc< val_stats['auc_avg']:
                 max_auc = val_stats['auc_avg']
-                save_model_state(model)
-
-            if max_accuracy < val_stats['acc1']:
-                max_accuracy = val_stats['acc1']
+                max_auc_accuracy = val_stats['acc1']
                 save_model_state(model)
 
             if log_writer is not None:
@@ -476,13 +473,12 @@ def main(args):
                     log_writer.flush()
                 with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
                     f.write(json.dumps(log_stats) + "\n")
-        #scheduler.step()
     
     model.load_state_dict(torch.load(f'results/{args.model}/bestval_model.pth'))
     test_stats = evaluate_shoulderxray(data_loader_test, model, device, args)
     print(f"Average AUC on the test set images: {test_stats['auc_avg']:.4f}")
     print(f"Accuracy of the network on test images: {test_stats['acc1']:.1f}%")
-    log_stats = {**{f'test_{k}': v for k, v in train_stats.items()},
+    log_stats = {**{f'test_{k}': v for k, v in test_stats.items()},
                     'n_parameters': n_parameters}
     if args.output_dir and misc.is_main_process():
         if log_writer is not None:
@@ -497,7 +493,7 @@ def main(args):
 def save_model_state(model):
     directory = f"results/{args.model}"
     if not os.path.exists(directory):
-        os.makedirs(directory)  # 디렉토리가 없다면 생성
+        os.makedirs(directory)
     path = f"{directory}/bestval_model.pth"
     torch.save(model.state_dict(), path)
     print("Checkpoint saved to {}".format(path))
