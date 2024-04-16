@@ -131,8 +131,7 @@ def get_args_parser():
     parser.add_argument('--log_dir', default='results/densenet121',
                         help='path where to tensorboard log')
     parser.add_argument('--device', action='store_false', 
-                        default=False,
-                        # default=torch.cuda.is_available(),
+                        default=torch.cuda.is_available(),
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='',
@@ -297,15 +296,9 @@ def main(args):
     else:
         raise NotImplementedError
     
-    # original_conv = model.features.conv0
-    # new_conv = torch.nn.Conv2d(1, original_conv.out_channels,
-    #                      kernel_size=original_conv.kernel_size, 
-    #                      stride=original_conv.stride, 
-    #                      padding=original_conv.padding, 
-    #                      bias=original_conv.bias)
-    # with torch.no_grad():
-    #     new_conv.weight[:] = torch.mean(original_conv.weight, dim=1, keepdim=True)
-    # model.features.conv0 = new_conv
+    # binary classification을 위한 model classifier(FC layer) 변경
+    num_ftrs = model.classifier.in_features
+    model.classifier = torch.nn.Linear(num_ftrs, 1, bias=True)
     
     if args.finetune and not args.eval:
         if 'vit' in args.model:
@@ -418,7 +411,7 @@ def main(args):
     elif args.dataset == 'chexpert':
         criterion = losses.CrossEntropyLoss()
     elif args.dataset == 'shoulderxray':
-        criterion = torch.nn.CrossEntropyLoss()            
+        criterion = torch.nn.BCEWithLogitsLoss()
     else:
         raise NotImplementedError
     # elif args.smoothing > 0.:
@@ -430,7 +423,7 @@ def main(args):
     print("criterion = %s" % str(criterion))
 
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
-
+    
     if args.eval:
         test_stats = evaluate_shoulderxray(data_loader_test, model, device, args)
         print(f"Average AUC of the network on the test set images: {test_stats['auc_avg']:.4f}")

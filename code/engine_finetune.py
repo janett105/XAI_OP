@@ -64,6 +64,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             # print(outputs.shape, targets.shape, torch.unique(targets))'
             if last_activation is not None:
                 outputs = last_activation(outputs)
+            targets=targets.float().unsqueeze(1)
             loss = criterion(outputs, targets)
 
         loss_value = loss.item()
@@ -141,14 +142,12 @@ def evaluate(data_loader, model, device):
 
 
 def computeAUROC(dataGT, dataPRED, classCount):
-    outAUROC = []
-    # print(dataGT.shape, dataPRED.shape)
-    for i in range(classCount):
+    if classCount==2:
         try:
-            outAUROC.append(roc_auc_score(dataGT, dataPRED[:, i]))
+            outAUROC = roc_auc_score(dataGT, dataPRED)
         except:
-            outAUROC.append(0.)
-    print(outAUROC)
+            outAUROC=0.
+
     return outAUROC
 
 
@@ -164,8 +163,8 @@ def accuracy(output, target, topk=(1,)):
 @torch.no_grad()
 def evaluate_shoulderxray(data_loader, model, device, args):
     if args.dataset == 'shoulderxray':
-        #criterion = torch.nn.BCEWithLogitsLoss()
-        criterion = torch.nn.CrossEntropyLoss()
+        criterion = torch.nn.BCEWithLogitsLoss()
+        #criterion = torch.nn.CrossEntropyLoss()
     else:
         raise NotImplementedError
 
@@ -185,11 +184,12 @@ def evaluate_shoulderxray(data_loader, model, device, args):
         # compute output
         with torch.cuda.amp.autocast():
             output = model(images)
-            #target = target.unsqueeze(1)
+            target = target.float().unsqueeze(1)
             loss = criterion(output, target)
         outputs.append(output)
         targets.append(target)
         metric_logger.update(loss=loss.item())
+
 
         # acc1, acc5 = accuracy(output, target, topk=(1, 5))
         acc1 = accuracy(output, target, topk=(1, ))[0]
@@ -212,10 +212,9 @@ def evaluate_shoulderxray(data_loader, model, device, args):
     #     auc_avg = np.average(auc_each_class)
 
     num_classes = args.nb_classes
-
     outputs = torch.cat(outputs, dim=0).sigmoid().cpu().numpy() # batch별 결과 합침
     targets = torch.cat(targets, dim=0).cpu().numpy()
-    print(targets.shape, outputs.shape)
+    print(f'total targets shape : {targets.shape}\ntotal outputs shape : {outputs.shape}')
     
     np.save(args.log_dir + '/' + 'y_gt.npy', targets)
     np.save(args.log_dir + '/' + 'y_pred.npy', outputs)
