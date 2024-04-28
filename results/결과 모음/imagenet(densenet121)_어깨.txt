@@ -1,0 +1,378 @@
+Setting up a new session...
+device : cuda
+=======1 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.030368661129916156, 0.5541579315164221)
+training..
+val result : (0.7295047700405121, 0.6)
+Checkpoint saved to results/densenet121/1Fold.txt
+
+===> epoch:2/5
+training..
+train result : (0.014158533075709401, 0.6575821104122991)
+training..
+val result : (0.6432904124259948, 0.65)
+Checkpoint saved to results/densenet121/1Fold.txt
+
+===> epoch:3/5
+training..
+train result : (0.013463530246122382, 0.6778476589797344)
+training..
+val result : (0.6862456738948822, 0.64375)
+
+===> epoch:4/5
+training..
+train result : (0.013083598157505929, 0.7085953878406709)
+training..
+val result : (0.9117063522338867, 0.51875)
+
+===> epoch:5/5
+training..
+train result : (0.011965193498281786, 0.7225716282320056)
+training..
+val result : (0.6581573188304901, 0.66875)
+Checkpoint saved to results/densenet121/1Fold.txt
+===> 1Fold BEST VAL_ACC: 66.875
+testing..
+===> 1Fold TEST_ACC: 70.048
+=======2 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.011538655846207231, 0.7346368715083799)
+training..
+val result : (0.5830923616886139, 0.7484276729559748)
+Checkpoint saved to results/densenet121/2Fold.txt
+
+===> epoch:2/5
+training..
+train result : (0.01198716621340057, 0.7451117318435754)
+training..
+val result : (0.4436304658651352, 0.7484276729559748)
+
+===> epoch:3/5
+training..
+train result : (0.010580413473976983, 0.75768156424581)
+training..
+val result : (1.0167755424976348, 0.6666666666666666)
+
+===> epoch:4/5
+training..
+train result : (0.010431254292711798, 0.7814245810055865)
+training..
+val result : (0.4471525907516479, 0.7987421383647799)
+Checkpoint saved to results/densenet121/2Fold.txt
+
+===> epoch:5/5
+training..
+train result : (0.008909253971076305, 0.8268156424581006)
+training..
+val result : (0.5502288579940796, 0.7735849056603774)
+===> 2Fold BEST VAL_ACC: 79.874
+testing..
+===> 2Fold TEST_ACC: 77.778
+=======3 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.010152842012452491, 0.784217877094972)
+training..
+val result : (0.7669400930404663, 0.6981132075471698)
+Checkpoint saved to results/densenet121/3Fold.txt
+
+===> epoch:2/5
+training..
+train result : (0.01005191723505656, 0.7870111731843575)
+training..
+val result : (0.47221441864967345, 0.7861635220125787)
+Checkpoint saved to results/densenet121/3Fold.txt
+
+===> epoch:3/5
+training..
+train result : (0.00845878866719611, 0.8379888268156425)
+training..
+val result : (0.772618655860424, 0.6540880503144654)
+
+===> epoch:4/5
+training..
+train result : (0.007718878358970454, 0.8533519553072626)
+training..
+val result : (0.5768897861242295, 0.7861635220125787)
+
+===> epoch:5/5
+training..
+train result : (0.006749801448097935, 0.8645251396648045)
+training..
+val result : (0.4123427450656891, 0.8238993710691824)
+Checkpoint saved to results/densenet121/3Fold.txt
+===> 3Fold BEST VAL_ACC: 82.390
+testing..
+===> 3Fold TEST_ACC: 66.667
+=======4 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.007112197412384881, 0.8610335195530726)
+training..
+val result : (0.8024682369083166, 0.7295597484276729)
+Checkpoint saved to results/densenet121/4Fold.txt
+
+===> epoch:2/5
+training..
+train result : (0.007643654214011299, 0.8477653631284916)
+training..
+val result : (0.5084853649139405, 0.7672955974842768)
+Checkpoint saved to results/densenet121/4Fold.txt
+
+===> epoch:3/5
+training..
+train result : (0.0057690029747692155, 0.8952513966480447)
+training..
+val result : (0.5452716208994388, 0.7421383647798742)
+
+===> epoch:4/5
+training..
+train result : (0.006158502513979688, 0.8743016759776536)
+training..
+val result : (0.48719860315322877, 0.7232704402515723)
+
+===> epoch:5/5
+training..
+train result : (0.005378275572517772, 0.9022346368715084)
+training..
+val result : (1.2308500036597252, 0.5911949685534591)
+===> 4Fold BEST VAL_ACC: 76.730
+testing..
+===> 4Fold TEST_ACC: 60.386
+=======5 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.006739152313014607, 0.8722067039106145)
+training..
+val result : (0.7659151751548052, 0.6792452830188679)
+Checkpoint saved to results/densenet121/5Fold.txt
+
+===> epoch:2/5
+training..
+train result : (0.00575481946821566, 0.8952513966480447)
+training..
+val result : (0.26135666072368624, 0.8805031446540881)
+Checkpoint saved to results/densenet121/5Fold.txt
+
+===> epoch:3/5
+training..
+train result : (0.00531546539362566, 0.895949720670391)
+training..
+val result : (0.3349721819162369, 0.8364779874213837)
+
+===> epoch:4/5
+training..
+train result : (0.004868795029175134, 0.9120111731843575)
+training..
+val result : (0.40665113031864164, 0.8238993710691824)
+
+===> epoch:5/5
+training..
+train result : (0.005371798030388208, 0.9008379888268156)
+training..
+val result : (0.307854551076889, 0.8553459119496856)
+===> 5Fold BEST VAL_ACC: 88.050
+testing..
+===> 5Fold TEST_ACC: 70.048
+=======6 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.005423275942419782, 0.8966480446927374)
+training..
+val result : (0.4238825559616089, 0.7987421383647799)
+Checkpoint saved to results/densenet121/6Fold.txt
+
+===> epoch:2/5
+training..
+train result : (0.004770487120122085, 0.9168994413407822)
+training..
+val result : (0.5406095027923584, 0.8176100628930818)
+Checkpoint saved to results/densenet121/6Fold.txt
+
+===> epoch:3/5
+training..
+train result : (0.004165408502758285, 0.9217877094972067)
+training..
+val result : (1.415202293265611, 0.610062893081761)
+
+===> epoch:4/5
+training..
+train result : (0.004322844075935858, 0.9217877094972067)
+training..
+val result : (0.5200835734605789, 0.7861635220125787)
+
+===> epoch:5/5
+training..
+train result : (0.003901799616438371, 0.9287709497206704)
+training..
+val result : (0.41341290175914763, 0.8490566037735849)
+Checkpoint saved to results/densenet121/6Fold.txt
+===> 6Fold BEST VAL_ACC: 84.906
+testing..
+===> 6Fold TEST_ACC: 71.981
+=======7 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.004774292505081789, 0.9168994413407822)
+training..
+val result : (0.23170493431389333, 0.9182389937106918)
+Checkpoint saved to results/densenet121/7Fold.txt
+
+===> epoch:2/5
+training..
+train result : (0.003898126407537931, 0.9329608938547486)
+training..
+val result : (0.175187386572361, 0.9433962264150944)
+Checkpoint saved to results/densenet121/7Fold.txt
+
+===> epoch:3/5
+training..
+train result : (0.0028959280289249656, 0.9476256983240223)
+training..
+val result : (0.365433531999588, 0.8364779874213837)
+
+===> epoch:4/5
+training..
+train result : (0.004160589664070694, 0.9252793296089385)
+training..
+val result : (0.353884682059288, 0.8742138364779874)
+
+===> epoch:5/5
+training..
+train result : (0.0028339785512214825, 0.9567039106145251)
+training..
+val result : (0.39935759007930755, 0.8364779874213837)
+===> 7Fold BEST VAL_ACC: 94.340
+testing..
+===> 7Fold TEST_ACC: 68.599
+=======8 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.0029186315705746783, 0.9504189944134078)
+training..
+val result : (0.35713364481925963, 0.8616352201257862)
+Checkpoint saved to results/densenet121/8Fold.txt
+
+===> epoch:2/5
+training..
+train result : (0.004124925863227727, 0.9182960893854749)
+training..
+val result : (0.17314466163516046, 0.9182389937106918)
+Checkpoint saved to results/densenet121/8Fold.txt
+
+===> epoch:3/5
+training..
+train result : (0.0040239636342466615, 0.9238826815642458)
+training..
+val result : (0.43313005156815054, 0.8113207547169812)
+
+===> epoch:4/5
+training..
+train result : (0.0032298218541675144, 0.9413407821229051)
+training..
+val result : (0.18382159508764745, 0.9433962264150944)
+Checkpoint saved to results/densenet121/8Fold.txt
+
+===> epoch:5/5
+training..
+train result : (0.0031162099842626007, 0.9462290502793296)
+training..
+val result : (0.6440292922779918, 0.7735849056603774)
+===> 8Fold BEST VAL_ACC: 94.340
+testing..
+===> 8Fold TEST_ACC: 67.150
+=======9 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.002770641702744696, 0.9574022346368715)
+training..
+val result : (0.07147863209247589, 0.9748427672955975)
+Checkpoint saved to results/densenet121/9Fold.txt
+
+===> epoch:2/5
+training..
+train result : (0.001721899964283278, 0.9713687150837989)
+training..
+val result : (0.07620097491890192, 0.9811320754716981)
+Checkpoint saved to results/densenet121/9Fold.txt
+
+===> epoch:3/5
+training..
+train result : (0.0027444446772152994, 0.9567039106145251)
+training..
+val result : (0.4496204394847155, 0.8805031446540881)
+
+===> epoch:4/5
+training..
+train result : (0.0025334689370643945, 0.9608938547486033)
+training..
+val result : (0.2782487779855728, 0.9056603773584906)
+
+===> epoch:5/5
+training..
+train result : (0.002060001977018, 0.9643854748603352)
+training..
+val result : (0.17317965142428876, 0.9433962264150944)
+===> 9Fold BEST VAL_ACC: 98.113
+testing..
+===> 9Fold TEST_ACC: 72.464
+=======10 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.0026019110236270926, 0.9671787709497207)
+training..
+val result : (0.0642731498926878, 0.9811320754716981)
+Checkpoint saved to results/densenet121/10Fold.txt
+
+===> epoch:2/5
+training..
+train result : (0.002910398999574008, 0.9504189944134078)
+training..
+val result : (0.07744517028331757, 0.9685534591194969)
+
+===> epoch:3/5
+training..
+train result : (0.0028883491962412257, 0.9594972067039106)
+training..
+val result : (0.17396461516618728, 0.9559748427672956)
+
+===> epoch:4/5
+training..
+train result : (0.0017247224249589588, 0.9706703910614525)
+training..
+val result : (0.13939298493787647, 0.9748427672955975)
+
+===> epoch:5/5
+training..
+train result : (0.0019378723841114544, 0.9706703910614525)
+training..
+val result : (0.31742212725803254, 0.9119496855345912)
+===> 10Fold BEST VAL_ACC: 98.113
+testing..
+===> 10Fold TEST_ACC: 71.981
+10 Fold TEST_Acc:
+        acc
+0  0.700483
+1  0.777778
+2  0.666667
+3  0.603865
+4  0.700483
+5  0.719807
+6   0.68599
+7  0.671498
+8  0.724638
+9  0.719807
+Final test Acc: 0.697 (0.046)

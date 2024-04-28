@@ -34,24 +34,42 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
 
     def forward_features(self, x):
         B = x.shape[0]
+        # print("Initial shape:", x.shape)  # 입력 텐서의 초기 형태 출력
+        
         x = self.patch_embed(x)
+        # print("After patch embedding:", x.shape)  # 패치 임베딩 후 형태 출력
 
         cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
+        # print("After position embedding:", x.shape)  # 위치 임베딩 후 형태 출력
+        
         x = self.pos_drop(x)
 
         for blk in self.blocks:
             x = blk(x)
+            # print("Shape after block:", x.shape)  # 각 Transformer block 처리 후 형태 출력
 
         if self.global_pool:
             x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
             outcome = self.fc_norm(x)
+            # print("After global pooling and norm:", x.shape)  # 글로벌 풀링 및 정규화 후 형태 출력
         else:
             x = self.norm(x)
             outcome = x[:, 0]
+            # print("After norm and selecting cls token:", outcome.shape)  # 정규화 및 cls 토큰 선택 후 형태 출력
 
         return outcome
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        # print("Output from forward_features:", x.shape)  # forward_features로부터 반환된 후의 차원 출력
+
+        if hasattr(self, 'head'):
+            x = self.head(x)
+        # print("After classification head:", x.shape)  # 분류 레이어 후의 출력 차원 확인
+
+        return x
 
 
 def vit_small_patch16(**kwargs):
