@@ -155,6 +155,7 @@ def main(args):
     for dataset_name in args.datasets_names:
         dataset_mean = mean_dict[dataset_name]
         dataset_std = std_dict[dataset_name]
+        # RandomResizedCrop
         if args.random_resize_range:
             if args.mask_strategy in ['heatmap_weighted', 'heatmap_inverse_weighted']:
                 resize_ratio_min, resize_ratio_max = args.random_resize_range
@@ -171,7 +172,6 @@ def main(args):
                     transforms.RandomHorizontalFlip(),
                     transforms.ToTensor(),
                     transforms.Normalize(dataset_mean, dataset_std)])
-
         else:
             print('Using Directly-Resize Mode. (no RandomResizedCrop)')
             transform_train = transforms.Compose([
