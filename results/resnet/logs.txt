@@ -1,8 +1,0 @@
-Files already downloaded and verified
-Files already downloaded and verified
-device : cuda
-=======1 fold=======
-
-===> epoch:1/200
-training..
-Backend QtAgg is interactive backend. Turning interactive mode on.
