@@ -24,7 +24,7 @@ from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 import models_vit
 
-from engine_finetune import train_one_epoch,evaluate_shoulderxray, evaluate_chestxray
+from engine_finetune import train_one_epoch,evaluate_shoulderxray
 from util.sampler import RASampler
 #from apex.optimizers import FusedAdam
 from libauc import losses
