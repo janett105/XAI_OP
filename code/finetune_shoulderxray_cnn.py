@@ -1,14 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-# --------------------------------------------------------
-# References:
-# DeiT: https://github.com/facebookresearch/deit
-# BEiT: https://github.com/microsoft/unilm/tree/master/beit
-# --------------------------------------------------------
-
 import argparse
 import datetime
 import json
@@ -282,14 +271,7 @@ def main(args):
             mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
             prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
             label_smoothing=args.smoothing, num_classes=args.nb_classes)
-    if 'vit' in args.model:
-        model = models_vit.__dict__[args.model](
-            img_size=args.input_size,
-            num_classes=args.nb_classes,
-            drop_rate=args.vit_dropout_rate,
-            drop_path_rate=args.drop_path,
-            global_pool=args.global_pool,
-        )
+
 
     elif 'densenet' in args.model or 'resnet' in args.model:
         model = models.__dict__[args.model](num_classes=args.nb_classes)
@@ -301,40 +283,7 @@ def main(args):
     model.classifier = torch.nn.Linear(num_ftrs, 1, bias=True)
     
     if args.finetune and not args.eval:
-        if 'vit' in args.model:
-            checkpoint = torch.load(args.finetune, map_location='cpu')
-
-            print("Load pre-trained checkpoint from: %s" % args.finetune)
-            checkpoint_model = checkpoint['model']
-            state_dict = model.state_dict()
-            for k in checkpoint_model.keys():
-                if k in state_dict:
-                    if checkpoint_model[k].shape == state_dict[k].shape:
-                        state_dict[k] = checkpoint_model[k]
-                        print(f"Loaded Index: {k} from Saved Weights")
-                    else:
-                        print(f"Shape of {k} doesn't match with {state_dict[k]}")
-                else:
-                    print(f"{k} not found in Init Model")
-
-            # interpolate position embedding
-            # model의 input size/구조가 달라졌을 때 필요
-            interpolate_pos_embed(model, checkpoint_model)
-
-            # load pre-trained model
-            # strict=False : 완벽한 일치 아니어도 됨
-            msg = model.load_state_dict(checkpoint_model, strict=False)
-            print(msg)
-
-
-            # if args.global_pool:
-            #     assert set(msg.missing_keys) == {'head.weight', 'head.bias', 'fc_norm.weight', 'fc_norm.bias'}
-            # else:
-            #     assert set(msg.missing_keys) == {'head.weight', 'head.bias'}
-
-            # manually initialize fc layer
-            trunc_normal_(model.head.weight, std=2e-5)
-        elif 'densenet' in args.model or 'resnet' in args.model:
+        if 'densenet' in args.model or 'resnet' in args.model:
             checkpoint = torch.load(args.finetune, map_location='cpu')
             print("Load pre-trained checkpoint from: %s" % args.finetune)
             if 'state_dict' in checkpoint.keys():
@@ -380,13 +329,7 @@ def main(args):
         model_without_ddp = model.module
 
     # build optimizer with layer-wise lr decay (lrd)
-    if 'vit' in args.model:
-        param_groups = lrd.param_groups_lrd(model_without_ddp, args.weight_decay,
-            no_weight_decay_list=model_without_ddp.no_weight_decay(),
-            layer_decay=args.layer_decay
-        )
-    else:
-        param_groups = optim_factory.param_groups_weight_decay(model_without_ddp, args.weight_decay)
+    param_groups = optim_factory.param_groups_weight_decay(model_without_ddp, args.weight_decay)
 
     if args.optimizer == 'adamw':
         optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
@@ -395,22 +338,7 @@ def main(args):
     #     optimizer = FusedAdam(param_groups, lr=args.lr)
     loss_scaler = NativeScaler()
 
-    if args.dataset == 'chestxray':
-        if mixup_fn is not None:
-            # smoothing is handled with mixup label transform
-            criterion = SoftTargetBinaryCrossEntropy()
-        else:
-            criterion = torch.nn.BCEWithLogitsLoss()
-    elif args.dataset == 'covidx':
-        criterion = torch.nn.CrossEntropyLoss()
-    elif args.dataset == 'node21':
-        if args.loss_func == 'bce':
-            criterion = torch.nn.BCEWithLogitsLoss()
-        elif args.loss_func is None:
-            criterion = torch.nn.CrossEntropyLoss()
-    elif args.dataset == 'chexpert':
-        criterion = losses.CrossEntropyLoss()
-    elif args.dataset == 'shoulderxray':
+    if args.dataset == 'shoulderxray':
         criterion = torch.nn.BCEWithLogitsLoss()
     else:
         raise NotImplementedError
