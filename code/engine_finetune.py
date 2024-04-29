@@ -190,31 +190,11 @@ def evaluate_shoulderxray(data_loader, model, device, args):
         correct = (predicted == target).float().sum()
         accuracy = 100 * correct / len(target)
         metric_logger.meters['acc1'].update(accuracy.item(), n=len(target))
-        
-
-    # gather the stats from all processes
-    # print(len(outputs), outputs[0].shape)
-    # outputs = collect_results_gpu(outputs, len(data_loader.dataset))
-    # targets = collect_results_gpu(targets, len(data_loader.dataset))
-    # print(outputs_collected)
-    # rank = dist.get_rank()
-    # if rank == 0:
-    #     outputs_gathered = [output.to(device) for output in outputs]
-    #     targets_gathered = [target.to(device) for target in targets]
-    #     outputs = torch.cat(outputs_gathered, dim=0).sigmoid().cpu().numpy()
-    #     targets = torch.cat(targets_gathered, dim=0).cpu().numpy()
-    #     auc_each_class = computeAUROC(targets, outputs, 14)
-    #     auc_avg = np.average(auc_each_class)
 
     num_classes = args.nb_classes
     outputs = torch.cat(outputs, dim=0).sigmoid().cpu().numpy() # batch별 결과 합침
     targets = torch.cat(targets, dim=0).cpu().numpy()
-    predicts = (outputs>=0.5).long().squeeze()
-    print(f'total targets shape : {targets.shape}\ntotal outputs shape : {outputs.shape}\ntotal predicts shape : {predicts.shape}')
-    
-    acc=(predicts == targets).float().mean().item()
-    np.save(args.log_dir + '/' + 'y_gt.npy', targets)
-    np.save(args.log_dir + '/' + 'y_pred.npy', predicts)
+    print(f'total targets shape : {targets.shape}\ntotal outputs shape : {outputs.shape}')
    
     auc_each_class = computeAUROC(targets, outputs, num_classes)
     auc_each_class_array = np.array(auc_each_class)
@@ -230,118 +210,6 @@ def evaluate_shoulderxray(data_loader, model, device, args):
 
     print('Loss {losses.global_avg:.3f}'.format(losses=metric_logger.loss))
     print('* Acc@1 {top1.global_avg:.3f}'.format(top1=metric_logger.acc1))
-    return {**{k: meter.global_avg for k, meter in metric_logger.meters.items()},
-            **{'auc_avg': auc_avg, 'auc_each_class': auc_each_class}}
-
-@torch.no_grad()
-def evaluate_chestxray(data_loader, model, device, args):
-
-    if args.dataset == 'chestxray':
-        criterion = torch.nn.BCEWithLogitsLoss()
-    elif args.dataset == 'covidx':
-        criterion = torch.nn.CrossEntropyLoss()
-    elif args.dataset == 'node21':
-        if args.loss_func == 'bce':
-            criterion = torch.nn.BCEWithLogitsLoss()
-        elif args.loss_func is None:
-            criterion = torch.nn.CrossEntropyLoss()
-    elif args.dataset == 'chexpert':
-        criterion = losses.CrossEntropyLoss()
-    else:
-        raise NotImplementedError
-
-    metric_logger = misc.MetricLogger(delimiter="  ")
-    header = 'Test:'
-
-    # switch to evaluation mode
-    model.eval()
-    outputs = []
-    targets = []
-    for batch in metric_logger.log_every(data_loader, 10, header):
-        images = batch[0]
-        target = batch[-1]
-        images = images.to(device, non_blocking=True)
-        target = target.to(device, non_blocking=True)
-
-        # compute output
-        with torch.cuda.amp.autocast():
-            output = model(images)
-            loss = criterion(output, target)
-
-
-        if args.dataset == 'covidx':
-            acc1 = accuracy(output, target, topk=(1, ))[0]
-
-        outputs.append(output)
-        targets.append(target)
-        # acc1, acc5 = accuracy(output, target, topk=(1, 5))
-        #
-
-        metric_logger.update(loss=loss.item())
-
-        if args.dataset == 'covidx':
-            batch_size = images.shape[0]
-            metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
-        # metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
-    # gather the stats from all processes
-    # print(len(outputs), outputs[0].shape)
-    # outputs = collect_results_gpu(outputs, len(data_loader.dataset))
-    # targets = collect_results_gpu(targets, len(data_loader.dataset))
-    # print(outputs_collected)
-    # rank = dist.get_rank()
-    # if rank == 0:
-    #     outputs_gathered = [output.to(device) for output in outputs]
-    #     targets_gathered = [target.to(device) for target in targets]
-    #     outputs = torch.cat(outputs_gathered, dim=0).sigmoid().cpu().numpy()
-    #     targets = torch.cat(targets_gathered, dim=0).cpu().numpy()
-    #     auc_each_class = computeAUROC(targets, outputs, 14)
-    #     auc_avg = np.average(auc_each_class)
-
-    num_classes = args.nb_classes
-
-    outputs = torch.cat(outputs, dim=0).sigmoid().cpu().numpy()
-    if args.dataset == 'covidx' or args.dataset == 'node21':
-
-        targets = torch.cat(targets, dim=0)
-        # assert targets.dim == 1
-        print(targets.shape)
-        if args.dataset == 'covidx':
-            y_pred = copy.deepcopy(outputs).argmax(axis=-1)
-            y_gt = copy.deepcopy(targets.cpu().numpy())
-            y_pred[y_pred == 2] = 1
-            y_gt[y_gt == 2] = 1
-            y_pred[y_pred == 3] = 2
-            y_gt[y_gt == 3] = 2
-            print_metrics_covidx(y_gt, y_pred)
-        if num_classes == 1:
-            targets = targets.cpu().numpy()
-        else:
-            targets = F.one_hot(targets, num_classes=num_classes).cpu().numpy()
-    elif args.dataset == 'chestxray':
-        targets = torch.cat(targets, dim=0).cpu().numpy()
-    elif args.dataset == 'chexpert':
-        targets = torch.cat(targets, dim=0).cpu().numpy()
-    else:
-        raise NotImplementedError
-    # print(targets.shape)
-
-    print(targets.shape, outputs.shape)
-    np.save(args.log_dir + '/' + 'y_gt.npy', targets)
-    np.save(args.log_dir + '/' + 'y_pred.npy', outputs)
-    auc_each_class = computeAUROC(targets, outputs, num_classes)
-    auc_each_class_array = np.array(auc_each_class)
-    missing_classes_index = np.where(auc_each_class_array == 0)[0]
-    # print(missing_classes_index)
-    if missing_classes_index.shape[0] > 0:
-        print('There are classes that not be predicted during testing,'
-              ' the indexes are:', missing_classes_index)
-
-    auc_avg = np.average(auc_each_class_array[auc_each_class_array != 0])
-    metric_logger.synchronize_between_processes()
-
-    print('Loss {losses.global_avg:.3f}'.format(losses=metric_logger.loss))
-    if args.dataset == 'covidx':
-        print('* Acc@1 {top1.global_avg:.3f}'.format(top1=metric_logger.acc1))
     return {**{k: meter.global_avg for k, meter in metric_logger.meters.items()},
             **{'auc_avg': auc_avg, 'auc_each_class': auc_each_class}}
 

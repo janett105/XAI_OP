@@ -23,7 +23,7 @@ python ./code/pretrain_shoulderxray_cnn.py ^
 ```
 set SAVE_DIR=results/shoulder_mae/densenet121/
 set DATASET_DIR=data/DB_X-ray/
-python ./code/finetune_shoulderxray.py ^
+python ./code/finetune_shoulderxray_cnn.py ^
 --output_dir %SAVE_DIR% ^
 --log_dir %SAVE_DIR% ^
 --batch_size 8 ^
@@ -43,7 +43,7 @@ python ./code/finetune_shoulderxray.py ^
 --repeated_aug ^
 --warmup_epochs 5 ^
 --eval_interval 10 ^
---finetune "models/densenet121_SHDR_1.4K_mae_800epc.pth" ^
+--finetune "models/densenet121_SHDR_1.4K_mae_800epc.pth"
 ```
 
 # Pre-training(shoulder) - ViT-S
