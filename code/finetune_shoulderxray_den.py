@@ -24,24 +24,29 @@ from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 import models_vit
 
-from engine_finetune_vit import train_one_epoch,evaluate_shoulderxray
+from engine_finetune_cnn import train_one_epoch,evaluate_shoulderxray, evaluate_chestxray
 from util.sampler import RASampler
 #from apex.optimizers import FusedAdam
 from libauc import losses
 from torchvision import models
 import timm.optim.optim_factory as optim_factory
 from collections import OrderedDict
+from torchvision.models import densenet121, DenseNet121_Weights # pretrain : IMAGENET1K_V1
+
+DATA_DIR = './data/Shoulder_X-rayDB/DB_X-ray'
+MODEL = densenet121
+MODEL_WEIGHTS = DenseNet121_Weights
 
 def get_args_parser():
     parser = argparse.ArgumentParser('MAE fine-tuning for image classification', add_help=False)
     parser.add_argument('--batch_size', default=64, type=int,
                         help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
-    parser.add_argument('--epochs', default=100, type=int)
+    parser.add_argument('--epochs', default=75, type=int)
     parser.add_argument('--accum_iter', default=1, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
-    parser.add_argument('--model', default='vit_small_patch16', type=str, metavar='MODEL',
+    parser.add_argument('--model', default=f'{MODEL}', type=str, metavar='MODEL',
                         help='Name of model to train')
 
     parser.add_argument('--input_size', default=224, type=int,
@@ -62,8 +67,8 @@ def get_args_parser():
                         help='base learning rate: absolute_lr = base_lr * total_batch_size / 256')
     parser.add_argument('--layer_decay', type=float, default=0.55,
                         help='layer-wise lr decay from ELECTRA/BEiT')
-    # 1e-5, 1e-6, 1e-7 시도하기
-    parser.add_argument('--min_lr', type=float, default=1e-6, metavar='LR',
+    # 1e-5, 1e-6, 1e-7 시도
+    parser.add_argument('--min_lr', type=float, default=1e-5, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0')
 
     parser.add_argument('--warmup_epochs', type=int, default=0, metavar='N',
@@ -102,7 +107,7 @@ def get_args_parser():
                         help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
 
     # * Finetuning params
-    parser.add_argument('--finetune', default='models/vit-s_CXR_0.3M_mae.pth',
+    parser.add_argument('--finetune', default='models/densenet121_CXR_0.3M_mae.pth',
                         help='finetune from checkpoint')
     parser.add_argument('--global_pool', action='store_true')
     parser.set_defaults(global_pool=True)
@@ -115,9 +120,9 @@ def get_args_parser():
     parser.add_argument('--nb_classes', default=2, type=int,
                         help='number of the classification types')
 
-    parser.add_argument('--output_dir', default='results/vit-s/',
+    parser.add_argument('--output_dir', default='results/imagenet_mae/',
                         help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default='results/vit-s',
+    parser.add_argument('--log_dir', default='results/imagenet_mae/',
                         help='path where to tensorboard log')
     parser.add_argument('--device', action='store_false', 
                         default=torch.cuda.is_available(),
@@ -132,7 +137,7 @@ def get_args_parser():
                         help='Perform evaluation only')
     parser.add_argument('--dist_eval', action='store_false', default=False,
                         help='Enabling distributed evaluation (recommended during training for faster monitor')
-    parser.add_argument('--num_workers', default=2, type=int)
+    parser.add_argument('--num_workers', default=4, type=int)
     parser.add_argument('--pin_mem', action='store_true',
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
@@ -226,11 +231,6 @@ def main(args):
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
         sampler_test = torch.utils.data.SequentialSampler(dataset_test)
 
-    """if args.log_dir is not None and not args.eval:
-        os.makedirs(args.log_dir, exist_ok=True)
-        log_writer = SummaryWriter(log_dir=args.log_dir)
-    else:
-        log_writer = None"""
 
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train, sampler=sampler_train,
@@ -265,53 +265,38 @@ def main(args):
             prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
             label_smoothing=args.smoothing, num_classes=args.nb_classes)
     
-    if 'vit' in args.model:
-        model = models_vit.__dict__[args.model](
-            img_size=args.input_size,
-            num_classes=args.nb_classes,
-            drop_rate=args.vit_dropout_rate,
-            drop_path_rate=args.drop_path,
-            global_pool=args.global_pool,
-        )
-        
-    """# binary classification을 위한 model classifier(FC layer) 변경
-    num_ftrs = model.classifier.in_features
-    model.classifier = torch.nn.Linear(num_ftrs, 1, bias=True)"""
+    if 'densenet' in args.model :
+        model = models.__dict__[args.model](num_classes=args.nb_classes)
+    else:
+        raise NotImplementedError
     
-    if args.finetune and not args.eval:
+    # binary classification을 위한 model classifier(FC layer) 변경
+    num_ftrs = model.classifier.in_features
+    model.classifier = torch.nn.Linear(num_ftrs, 1, bias=True)
+    
+    """if args.finetune and not args.eval:
         checkpoint = torch.load(args.finetune, map_location='cpu')
-
         print("Load pre-trained checkpoint from: %s" % args.finetune)
-        checkpoint_model = checkpoint['model']
-        state_dict = model.state_dict()
-        for k in checkpoint_model.keys():
-            if k in state_dict:
-                if checkpoint_model[k].shape == state_dict[k].shape:
-                    state_dict[k] = checkpoint_model[k]
-                    print(f"Loaded Index: {k} from Saved Weights")
-                else:
-                    print(f"Shape of {k} doesn't match with {state_dict[k]}")
-            else:
-                print(f"{k} not found in Init Model")
+        if 'state_dict' in checkpoint.keys():
+            checkpoint_model = checkpoint['state_dict']
+        elif 'model' in checkpoint.keys():
+            checkpoint_model = checkpoint['model']
+        else:
+            checkpoint_model = checkpoint
+        if args.checkpoint_type == 'smp_encoder':
+            state_dict = checkpoint_model
 
-        # interpolate position embedding
-        # model의 input size/구조가 달라졌을 때 필요
-        interpolate_pos_embed(model, checkpoint_model)
+            new_state_dict = OrderedDict()
 
-        # load pre-trained model
-        # strict=False : 완벽한 일치 아니어도 됨
+            for key, value in state_dict.items():
+                if 'model.encoder.' in key:
+                    new_key = key.replace('model.encoder.', '')
+                    new_state_dict[new_key] = value
+            checkpoint_model = new_state_dict
         msg = model.load_state_dict(checkpoint_model, strict=False)
-        print(msg)
+        print(msg)"""
 
-        # if args.global_pool:
-        #     assert set(msg.missing_keys) == {'head.weight', 'head.bias', 'fc_norm.weight', 'fc_norm.bias'}
-        # else:
-        #     assert set(msg.missing_keys) == {'head.weight', 'head.bias'}
-
-        # manually initialize fc layer
-        trunc_normal_(model.head.weight, std=2e-5)
-
-    model.to(device)
+    model(MODEL_WEIGHTS).to(device)
 
     model_without_ddp = model
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -335,10 +320,7 @@ def main(args):
         model_without_ddp = model.module
 
     # build optimizer with layer-wise lr decay (lrd)
-    param_groups = lrd.param_groups_lrd(model_without_ddp, args.weight_decay,
-            no_weight_decay_list=model_without_ddp.no_weight_decay(),
-            layer_decay=args.layer_decay
-        )
+    param_groups = optim_factory.param_groups_weight_decay(model_without_ddp, args.weight_decay)
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
     loss_scaler = NativeScaler()
 

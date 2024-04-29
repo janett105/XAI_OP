@@ -1,6 +1,7 @@
 import torch
 import torchvision
-from .Vizualization import imageshow
+import matplotlib.pyplot as plt
+
 
 def train(model, train_loader, optimizer, criterion, epoch, DEVICE):
     model.train()
@@ -37,7 +38,9 @@ def evaluate(model, valtest_loader, criterion, DEVICE, BATCH_SIZE, CLASSES, mode
             
             # test인 경우 한 개의 batch는 gt, prediction 비교 시각화
             if mode=='test' and batch_idx==0:
-                imageshow(torchvision.utils.make_grid(data_batch))
+                #imshow(torchvision.utils.make_grid(data_batch))
+                plt.imshow(torchvision.utils.make_grid(data_batch))
+                plt.show()
                 print('Real labels :', ' '.join(f'{CLASSES[labels[j]]}' for j in range(BATCH_SIZE)))
 
                 outputs = model(data_batch)
