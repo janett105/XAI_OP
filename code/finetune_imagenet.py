@@ -18,7 +18,7 @@ import sys
 import visdom #python -m visdom.server
 import os
 
-#from torchvision.models import resnet50, ResNet50_Weights # pretrain :  ImageNet
+from torchvision.models import densenet12150, DenseNet121_WeightsResNet50_Weights
 """
 mae pretraining : based on chest X-ray MAE study
     masking 비율 90%
@@ -38,14 +38,14 @@ fine tuning : based on chest X-ray MAE study
     n_epoch : 75 
 """
 def main():
-    sys.stdout = open('results/logs.txt', 'w')
+    sys.stdout = open('results/imagenet_mae/logs.txt', 'w')
 
     parser = argparse.ArgumentParser(description="CNN/ViT X-ray classification")
     parser.add_argument('--lr', default=1.5e-4, type=float, help='learning rate')
     parser.add_argument('--epoch', default=75, type=int, help='number of epochs tp train for')
-    parser.add_argument('--trainBatchSize', default=16, type=int, help='training batch size') # 16, 32, 64
-    parser.add_argument('--testBatchSize', default=16, type=int, help='testing batch size')
-    parser.add_argument('--n_folds', default=10, type=int, help='the number of folds in stratified k fold')
+    parser.add_argument('--trainBatchSize', default=32, type=int, help='training batch size') # 16, 32, 64
+    parser.add_argument('--testBatchSize', default=32, type=int, help='testing batch size')
+    parser.add_argument('--n_folds', default=5, type=int, help='the number of folds in stratified k fold')
     parser.add_argument('--model', default='cnn', type=str, help='model')
     args = parser.parse_args()
 
