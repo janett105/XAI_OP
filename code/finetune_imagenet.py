@@ -37,9 +37,8 @@ fine tuning : based on chest X-ray MAE study
     DropPath rate : 0.2
     n_epoch : 75 
 """
-
 def main():
-    sys.stdout = open('results/imagenet_mae/logs.txt', 'w')
+    sys.stdout = open('resWults/imagenet_mae/logs.txt', 'w')
 
     parser = argparse.ArgumentParser(description="CNN/ViT X-ray classification")
     parser.add_argument('--lr', default=1.5e-4, type=float, help='learning rate')
