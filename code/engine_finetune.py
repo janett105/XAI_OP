@@ -214,10 +214,12 @@ def evaluate_shoulderxray(data_loader, model, device, args):
     num_classes = args.nb_classes
     outputs = torch.cat(outputs, dim=0).sigmoid().cpu().numpy() # batch별 결과 합침
     targets = torch.cat(targets, dim=0).cpu().numpy()
-    print(f'total targets shape : {targets.shape}\ntotal outputs shape : {outputs.shape}')
+    predicts = (outputs>=0.5).long().squeeze()
+    print(f'total targets shape : {targets.shape}\ntotal outputs shape : {outputs.shape}\ntotal predicts shape : {predicts.shape}')
     
+    acc=(predicts == targets).float().mean().item()
     np.save(args.log_dir + '/' + 'y_gt.npy', targets)
-    np.save(args.log_dir + '/' + 'y_pred.npy', outputs)
+    np.save(args.log_dir + '/' + 'y_pred.npy', predicts)
    
     auc_each_class = computeAUROC(targets, outputs, num_classes)
     auc_each_class_array = np.array(auc_each_class)
@@ -226,6 +228,7 @@ def evaluate_shoulderxray(data_loader, model, device, args):
     if missing_classes_index.shape[0] > 0:
         print('There are classes that not be predicted during testing,'
               ' the indexes are:', missing_classes_index)
+    
 
     auc_avg = np.average(auc_each_class_array[auc_each_class_array != 0])
     metric_logger.synchronize_between_processes()
