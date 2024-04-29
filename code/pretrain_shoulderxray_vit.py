@@ -24,16 +24,16 @@ import torchvision.datasets as datasets
 
 import timm
 
-# assert timm.__version__ == "0.3.2"  # version check
+assert timm.__version__ == "0.3.2"  # version check
 import timm.optim.optim_factory as optim_factory
 
 import util.misc as misc
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-from models_mae_cnn import MaskedAutoencoderCNN
+import code.models_mae_vit as models_mae_vit
 
 from engine_pretrain import train_one_epoch
-from util.dataloader_med import CheXpert, ChestX_ray14, MIMIC
+from util.dataloader_med import CheXpert, ChestX_ray14, MIMIC, Shoulder_xray
 import cv2
 from util.custom_transforms import custom_train_transform
 from util.sampler import RASampler
@@ -48,7 +48,7 @@ def get_args_parser():
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
-    parser.add_argument('--model', default='mae_vit_large_patch16', type=str, metavar='MODEL',
+    parser.add_argument('--model', default='mae_vit_small_patch16_dec128d2b', type=str, metavar='MODEL',
                         help='Name of model to train')
 
     parser.add_argument('--input_size', default=224, type=int,
@@ -76,7 +76,7 @@ def get_args_parser():
                         help='epochs to warmup LR')
 
     # Dataset parameters
-    parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
+    parser.add_argument('--data_path', default='/data/DB_X-ray/train_to', type=str,
                         help='dataset path')
 
     parser.add_argument('--output_dir', default='./output_dir',
@@ -105,13 +105,15 @@ def get_args_parser():
     parser.add_argument('--dist_url', default='env://',
                         help='url used to set up distributed training')
     parser.add_argument("--train_list", default=None, type=str, help="file for training list")
-    parser.add_argument('--random_resize_range', type=float, nargs='+', default=None,
+    parser.add_argument('--random_resize_range', type=float, nargs='+', default=['0.5', '1.0'],
                         help='RandomResizedCrop min/max ratio, default: None)')
     parser.add_argument('--fixed_lr', action='store_true', default=False)
     parser.add_argument('--mask_strategy', default='random', type=str)
+
     parser.add_argument('--repeated-aug', action='store_true', default=False)
     parser.add_argument('--datasets_names', type=str, nargs='+', default=[])
 
+    parser.add_argument('--distributed', type=bool, default=True, action='store_false')
     return parser
 
 
@@ -155,7 +157,8 @@ def main(args):
     for dataset_name in args.datasets_names:
         dataset_mean = mean_dict[dataset_name]
         dataset_std = std_dict[dataset_name]
-        # RandomResizedCrop
+        
+        # random resized crop
         if args.random_resize_range:
             if args.mask_strategy in ['heatmap_weighted', 'heatmap_inverse_weighted']:
                 resize_ratio_min, resize_ratio_max = args.random_resize_range
@@ -181,28 +184,29 @@ def main(args):
                 transforms.Normalize(dataset_mean, dataset_std)])
 
         if args.mask_strategy in ['heatmap_weighted', 'heatmap_inverse_weighted']:
-            heatmap_path = 'nih_bbox_heatmap.png'
+            heatmap_path = 'results/mask_heatmap.png'
         else:
             heatmap_path = None
 
-        if dataset_name == 'chexpert':
-            dataset = CheXpert(csv_path="data/CheXpert-v1.0-small/train.csv", image_root_path='data/CheXpert-v1.0-small/', use_upsampling=False,
-                               use_frontal=True, mode='train', class_index=-1, transform=transform_train,
-                               heatmap_path=heatmap_path, pretraining=True)
-        elif dataset_name == 'chestxray_nih':
-            dataset = ChestX_ray14('data/nih_chestxray', "data_splits/chestxray/train_official.txt", augment=transform_train, num_class=14,
-                                   heatmap_path=heatmap_path, pretraining=True)
-        elif dataset_name == 'mimic_cxr':
-            dataset = MIMIC(path='data/mimic_cxr', version="chexpert", split="train", transform=transform_train, views=["AP", "PA"],
-                            unique_patients=False, pretraining=True)
-        else:
-            raise NotImplementedError
-        print(dataset)
-        concat_datasets.append(dataset)
-    # dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
-    dataset_train = torch.utils.data.ConcatDataset(concat_datasets)
+        # if dataset_name == 'chexpert':
+        #     dataset = CheXpert(csv_path="data/CheXpert-v1.0-small/train.csv", image_root_path='data/CheXpert-v1.0-small/', use_upsampling=False,
+        #                        use_frontal=True, mode='train', class_index=-1, transform=transform_train,
+        #                        heatmap_path=heatmap_path, pretraining=True)
+        # elif dataset_name == 'chestxray_nih':
+        #     dataset = ChestX_ray14('data/nih_chestxray', "data_splits/chestxray/train_official.txt", augment=transform_train, num_class=14,
+        #                            heatmap_path=heatmap_path, pretraining=True)
+        # elif dataset_name == 'mimic_cxr':
+        #     dataset = MIMIC(path='data/mimic_cxr', version="chexpert", split="train", transform=transform_train, views=["AP", "PA"],
+        #                     unique_patients=False, pretraining=True)
+        # else:
+        #     raise NotImplementedError
+        
+        # concat_datasets.append(dataset)
+    #dataset_train = torch.utils.data.ConcatDataset(concat_datasets)
+    dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
+    print(dataset_train)
 
-    if True:  # args.distributed:
+    if args.distributed:
         num_tasks = misc.get_world_size()
         global_rank = misc.get_rank()
         if args.repeated_aug:
@@ -215,6 +219,7 @@ def main(args):
             )
         print("Sampler_train = %s" % str(sampler_train))
     else:
+        global_rank=0
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
 
     if global_rank == 0 and args.log_dir is not None:
@@ -232,7 +237,21 @@ def main(args):
         persistent_workers=True
     )
 
-    model = MaskedAutoencoderCNN(img_size=224, patch_size=16, model_arch='Unet', encoder_name=args.model)
+    # define the model
+
+    # if args.mask_strategy in ['heatmap_weighted', 'heatmap_inverse_weighted']:
+    #     print('Using Heatmap nih_bbox_heatmap.png for attentive masking')
+    #     heatmap = cv2.imread('nih_bbox_heatmap.png')
+    # elif args.mask_strategy == 'random':
+    #     heatmap = None
+    # else:
+    #     raise NotImplementedError
+
+    model = models_mae_vit.__dict__[args.model](norm_pix_loss=args.norm_pix_loss, img_size=args.input_size,
+                                            heatmap=None, mask_strategy=args.mask_strategy,
+                                            weight_range=args.weight_range,
+                                            heatmap_binary_threshold=args.heatmap_binary_threshold)
+
     model.to(device)
 
     model_without_ddp = model
@@ -278,7 +297,7 @@ def main(args):
                 loss_scaler=loss_scaler, epoch=epoch)
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                     'epoch': epoch }
+                     'epoch': epoch, }
 
         if args.output_dir and misc.is_main_process():
             if log_writer is not None:

@@ -24,13 +24,13 @@ import torchvision.datasets as datasets
 
 import timm
 
-assert timm.__version__ == "0.3.2"  # version check
+# assert timm.__version__ == "0.3.2"  # version check
 import timm.optim.optim_factory as optim_factory
 
 import util.misc as misc
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-import models_mae
+from models_mae_cnn import MaskedAutoencoderCNN
 
 from engine_pretrain import train_one_epoch
 from util.dataloader_med import CheXpert, ChestX_ray14, MIMIC
@@ -76,15 +76,13 @@ def get_args_parser():
                         help='epochs to warmup LR')
 
     # Dataset parameters
-    parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
+    parser.add_argument('--data_path', default='data/DB_X-ray/train_to', type=str,
                         help='dataset path')
 
     parser.add_argument('--output_dir', default='./output_dir',
                         help='path where to save, empty for no saving')
     parser.add_argument('--log_dir', default='./output_dir',
                         help='path where to tensorboard log')
-    parser.add_argument('--device', default='cuda',
-                        help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='',
                         help='resume from checkpoint')
@@ -109,10 +107,15 @@ def get_args_parser():
                         help='RandomResizedCrop min/max ratio, default: None)')
     parser.add_argument('--fixed_lr', action='store_true', default=False)
     parser.add_argument('--mask_strategy', default='random', type=str)
-
     parser.add_argument('--repeated-aug', action='store_true', default=False)
     parser.add_argument('--datasets_names', type=str, nargs='+', default=[])
 
+
+    parser.add_argument("--checkpoint_type", default=None, type=str)
+    parser.add_argument('--distributed', default=True, action='store_false')
+    parser.add_argument('--device', action='store_false', 
+                        default=torch.cuda.is_available(),
+                        help='device to use for training / testing')
     return parser
 
 
@@ -122,7 +125,11 @@ def main(args):
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
     print("{}".format(args).replace(', ', ',\n'))
 
-    device = torch.device(args.device)
+    if args.device:
+        device = torch.device('cuda')
+        cudnn.benchmark = True
+    else: device = torch.device('cpu')
+    print(f"device : {device}")
 
     # fix the seed for reproducibility
     seed = args.seed + misc.get_rank()
@@ -143,19 +150,23 @@ def main(args):
     # else:
     #     scaled_ratio_min = 0.2 * args.resize_input / 1024
     #     scaled_ratio_max = 1.0 * args.resize_input / 1024
+
     concat_datasets = []
     mean_dict = {'chexpert': [0.485, 0.456, 0.406],
                  'chestxray_nih': [0.5056, 0.5056, 0.5056],
-                 'mimic_cxr': [0.485, 0.456, 0.406]
+                 'mimic_cxr': [0.,485, 0.456, 0.406],
+                 'shoulder_xray': [0.5056, 0.5056, 0.5056]
                  }
     std_dict = {'chexpert': [0.229, 0.224, 0.225],
                 'chestxray_nih': [0.252, 0.252, 0.252],
-                'mimic_cxr': [0.229, 0.224, 0.225]
+                'mimic_cxr': [0.229, 0.224, 0.225],
+                'shoulder_xray': [0.252, 0.252, 0.252]
                 }
     print(args.datasets_names)
     for dataset_name in args.datasets_names:
         dataset_mean = mean_dict[dataset_name]
         dataset_std = std_dict[dataset_name]
+        # RandomResizedCrop
         if args.random_resize_range:
             if args.mask_strategy in ['heatmap_weighted', 'heatmap_inverse_weighted']:
                 resize_ratio_min, resize_ratio_max = args.random_resize_range
@@ -172,7 +183,6 @@ def main(args):
                     transforms.RandomHorizontalFlip(),
                     transforms.ToTensor(),
                     transforms.Normalize(dataset_mean, dataset_std)])
-
         else:
             print('Using Directly-Resize Mode. (no RandomResizedCrop)')
             transform_train = transforms.Compose([
@@ -186,24 +196,25 @@ def main(args):
         else:
             heatmap_path = None
 
-        if dataset_name == 'chexpert':
-            dataset = CheXpert(csv_path="data/CheXpert-v1.0-small/train.csv", image_root_path='data/CheXpert-v1.0-small/', use_upsampling=False,
-                               use_frontal=True, mode='train', class_index=-1, transform=transform_train,
-                               heatmap_path=heatmap_path, pretraining=True)
-        elif dataset_name == 'chestxray_nih':
-            dataset = ChestX_ray14('data/nih_chestxray', "data_splits/chestxray/train_official.txt", augment=transform_train, num_class=14,
-                                   heatmap_path=heatmap_path, pretraining=True)
-        elif dataset_name == 'mimic_cxr':
-            dataset = MIMIC(path='data/mimic_cxr', version="chexpert", split="train", transform=transform_train, views=["AP", "PA"],
-                            unique_patients=False, pretraining=True)
-        else:
-            raise NotImplementedError
-        print(dataset)
-        concat_datasets.append(dataset)
-    # dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
-    dataset_train = torch.utils.data.ConcatDataset(concat_datasets)
+    #     if dataset_name == 'chexpert':
+    #         dataset = CheXpert(csv_path="data/CheXpert-v1.0-small/train.csv", image_root_path='data/CheXpert-v1.0-small/', use_upsampling=False,
+    #                            use_frontal=True, mode='train', class_index=-1, transform=transform_train,
+    #                            heatmap_path=heatmap_path, pretraining=True)
+    #     elif dataset_name == 'chestxray_nih':
+    #         dataset = ChestX_ray14('data/nih_chestxray', "data_splits/chestxray/train_official.txt", augment=transform_train, num_class=14,
+    #                                heatmap_path=heatmap_path, pretraining=True)
+    #     elif dataset_name == 'mimic_cxr':
+    #         dataset = MIMIC(path='data/mimic_cxr', version="chexpert", split="train", transform=transform_train, views=["AP", "PA"],
+    #                         unique_patients=False, pretraining=True)
+    #     else:
+    #         raise NotImplementedError
+    #     print(dataset)
+    #     concat_datasets.append(dataset)
+    # dataset_train = torch.utils.data.ConcatDataset(concat_datasets)
+    dataset_train = datasets.ImageFolder(args.data_path, transform=transform_train)
+    print(dataset_train)
 
-    if True:  # args.distributed:
+    if args.distributed:
         num_tasks = misc.get_world_size()
         global_rank = misc.get_rank()
         if args.repeated_aug:
@@ -216,6 +227,7 @@ def main(args):
             )
         print("Sampler_train = %s" % str(sampler_train))
     else:
+        global_rank=0
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
 
     if global_rank == 0 and args.log_dir is not None:
@@ -233,21 +245,8 @@ def main(args):
         persistent_workers=True
     )
 
-    # define the model
-
-    # if args.mask_strategy in ['heatmap_weighted', 'heatmap_inverse_weighted']:
-    #     print('Using Heatmap nih_bbox_heatmap.png for attentive masking')
-    #     heatmap = cv2.imread('nih_bbox_heatmap.png')
-    # elif args.mask_strategy == 'random':
-    #     heatmap = None
-    # else:
-    #     raise NotImplementedError
-
-    model = models_mae.__dict__[args.model](norm_pix_loss=args.norm_pix_loss, img_size=args.input_size,
-                                            heatmap=None, mask_strategy=args.mask_strategy,
-                                            weight_range=args.weight_range,
-                                            heatmap_binary_threshold=args.heatmap_binary_threshold)
-
+    model = MaskedAutoencoderCNN(checkpoint_type=args.checkpoint_type, img_size=224, patch_size=16, model_arch='Unet', encoder_name='densenet121',
+                                 pretrained_path='models/densenet121_CXR_0.3M_mae.pth')
     model.to(device)
 
     model_without_ddp = model
@@ -269,7 +268,7 @@ def main(args):
         model_without_ddp = model.module
 
     # following timm: set wd as 0 for bias and norm layers
-    param_groups = optim_factory.add_weight_decay(model_without_ddp, args.weight_decay)
+    param_groups = optim_factory.param_groups_weight_decay(model_without_ddp, args.weight_decay)
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr, betas=(0.9, 0.95))
     print(optimizer)
     loss_scaler = NativeScaler()
@@ -281,6 +280,7 @@ def main(args):
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)
+            
         train_stats = train_one_epoch(
             model, data_loader_train,
             optimizer, device, epoch, loss_scaler,
@@ -293,7 +293,7 @@ def main(args):
                 loss_scaler=loss_scaler, epoch=epoch)
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                     'epoch': epoch, }
+                     'epoch': epoch }
 
         if args.output_dir and misc.is_main_process():
             if log_writer is not None:
