@@ -374,10 +374,6 @@ def main(args):
         )
 
         if args.output_dir and (epoch % args.eval_interval == 0 or epoch + 1 == args.epochs):
-            misc.save_model(
-                args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
-                loss_scaler=loss_scaler, epoch=epoch)
-
             val_stats = evaluate_shoulderxray(data_loader_val, model, device, args)
             print(f"Average AUC on the val set images: {val_stats['auc_avg']:.4f}")
             print(f"Accuracy of the network on val images: {val_stats['acc1']:.1f}%")
@@ -385,7 +381,9 @@ def main(args):
             if max_auc< val_stats['auc_avg']:
                 max_auc = val_stats['auc_avg']
                 max_auc_accuracy = val_stats['acc1']
-                save_model_state(model)
+                misc.save_model(
+                    args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+                    loss_scaler=loss_scaler, epoch=epoch)
 
             if log_writer is not None:
                 log_writer.add_scalar('perf/auc_avg', val_stats['auc_avg'], epoch)
@@ -417,14 +415,6 @@ def main(args):
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Training time {}'.format(total_time_str))
-
-def save_model_state(model):
-    directory = f"results/{args.model}"
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    path = f"{directory}/bestval_model.pth"
-    torch.save(model.state_dict(), path)
-    print("Checkpoint saved to {}".format(path))
 
 if __name__ == '__main__':
     args = get_args_parser()
