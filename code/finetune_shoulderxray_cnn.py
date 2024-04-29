@@ -24,7 +24,7 @@ from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 import models_vit
 
-from engine_finetune import train_one_epoch,evaluate_shoulderxray
+from engine_finetune_cnn import train_one_epoch,evaluate_shoulderxray, evaluate_chestxray
 from util.sampler import RASampler
 #from apex.optimizers import FusedAdam
 from libauc import losses
@@ -32,12 +32,13 @@ from torchvision import models
 import timm.optim.optim_factory as optim_factory
 from collections import OrderedDict
 
+
 def get_args_parser():
     parser = argparse.ArgumentParser('MAE fine-tuning for image classification', add_help=False)
-    parser.add_argument('--batch_size', default=8, type=int,
+    parser.add_argument('--batch_size', default=64, type=int,
                         help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
-    parser.add_argument('--epochs', default=75, type=int)
-    parser.add_argument('--accum_iter', default=4, type=int,
+    parser.add_argument('--epochs', default=100, type=int)
+    parser.add_argument('--accum_iter', default=1, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
@@ -62,7 +63,7 @@ def get_args_parser():
                         help='base learning rate: absolute_lr = base_lr * total_batch_size / 256')
     parser.add_argument('--layer_decay', type=float, default=0.55,
                         help='layer-wise lr decay from ELECTRA/BEiT')
-
+    # 1e-5, 1e-6, 1e-7 시도
     parser.add_argument('--min_lr', type=float, default=1e-5, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0')
 
@@ -226,16 +227,6 @@ def main(args):
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
         sampler_test = torch.utils.data.SequentialSampler(dataset_test)
 
-    # if global_rank == 0 and args.log_dir is not None and not args.eval:
-    #     os.makedirs(args.log_dir, exist_ok=True)
-    #     log_writer = SummaryWriter(log_dir=args.log_dir)
-    # else:
-    #     log_writer = None
-    if args.log_dir is not None and not args.eval:
-        os.makedirs(args.log_dir, exist_ok=True)
-        log_writer = SummaryWriter(log_dir=args.log_dir)
-    else:
-        log_writer = None
 
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train, sampler=sampler_train,
@@ -269,16 +260,8 @@ def main(args):
             mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
             prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
             label_smoothing=args.smoothing, num_classes=args.nb_classes)
-    if 'vit' in args.model:
-        model = models_vit.__dict__[args.model](
-            img_size=args.input_size,
-            num_classes=args.nb_classes,
-            drop_rate=args.vit_dropout_rate,
-            drop_path_rate=args.drop_path,
-            global_pool=args.global_pool,
-        )
-
-    elif 'densenet' in args.model or 'resnet' in args.model:
+    
+    if 'densenet' in args.model :
         model = models.__dict__[args.model](num_classes=args.nb_classes)
     else:
         raise NotImplementedError
@@ -288,59 +271,26 @@ def main(args):
     model.classifier = torch.nn.Linear(num_ftrs, 1, bias=True)
     
     if args.finetune and not args.eval:
-        if 'vit' in args.model:
-            checkpoint = torch.load(args.finetune, map_location='cpu')
-
-            print("Load pre-trained checkpoint from: %s" % args.finetune)
+        checkpoint = torch.load(args.finetune, map_location='cpu')
+        print("Load pre-trained checkpoint from: %s" % args.finetune)
+        if 'state_dict' in checkpoint.keys():
+            checkpoint_model = checkpoint['state_dict']
+        elif 'model' in checkpoint.keys():
             checkpoint_model = checkpoint['model']
-            state_dict = model.state_dict()
-            for k in checkpoint_model.keys():
-                if k in state_dict:
-                    if checkpoint_model[k].shape == state_dict[k].shape:
-                        state_dict[k] = checkpoint_model[k]
-                        print(f"Loaded Index: {k} from Saved Weights")
-                    else:
-                        print(f"Shape of {k} doesn't match with {state_dict[k]}")
-                else:
-                    print(f"{k} not found in Init Model")
+        else:
+            checkpoint_model = checkpoint
+        if args.checkpoint_type == 'smp_encoder':
+            state_dict = checkpoint_model
 
-            # interpolate position embedding
-            # model의 input size/구조가 달라졌을 때 필요
-            interpolate_pos_embed(model, checkpoint_model)
+            new_state_dict = OrderedDict()
 
-            # load pre-trained model
-            # strict=False : 완벽한 일치 아니어도 됨
-            msg = model.load_state_dict(checkpoint_model, strict=False)
-            print(msg)
-
-            # if args.global_pool:
-            #     assert set(msg.missing_keys) == {'head.weight', 'head.bias', 'fc_norm.weight', 'fc_norm.bias'}
-            # else:
-            #     assert set(msg.missing_keys) == {'head.weight', 'head.bias'}
-
-            # manually initialize fc layer
-            trunc_normal_(model.head.weight, std=2e-5)
-        elif 'densenet' in args.model or 'resnet' in args.model:
-            checkpoint = torch.load(args.finetune, map_location='cpu')
-            print("Load pre-trained checkpoint from: %s" % args.finetune)
-            if 'state_dict' in checkpoint.keys():
-                checkpoint_model = checkpoint['state_dict']
-            elif 'model' in checkpoint.keys():
-                checkpoint_model = checkpoint['model']
-            else:
-                checkpoint_model = checkpoint
-            if args.checkpoint_type == 'smp_encoder':
-                state_dict = checkpoint_model
-
-                new_state_dict = OrderedDict()
-
-                for key, value in state_dict.items():
-                    if 'model.encoder.' in key:
-                        new_key = key.replace('model.encoder.', '')
-                        new_state_dict[new_key] = value
-                checkpoint_model = new_state_dict
-            msg = model.load_state_dict(checkpoint_model, strict=False)
-            print(msg)
+            for key, value in state_dict.items():
+                if 'model.encoder.' in key:
+                    new_key = key.replace('model.encoder.', '')
+                    new_state_dict[new_key] = value
+            checkpoint_model = new_state_dict
+        msg = model.load_state_dict(checkpoint_model, strict=False)
+        print(msg)
 
     model.to(device)
 
@@ -366,38 +316,12 @@ def main(args):
         model_without_ddp = model.module
 
     # build optimizer with layer-wise lr decay (lrd)
-    if 'vit' in args.model:
-        param_groups = lrd.param_groups_lrd(model_without_ddp, args.weight_decay,
-            no_weight_decay_list=model_without_ddp.no_weight_decay(),
-            layer_decay=args.layer_decay
-        )
-    else:
-        param_groups = optim_factory.param_groups_weight_decay(model_without_ddp, args.weight_decay)
-
-    if args.optimizer == 'adamw':
-        optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
-        #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
-    # elif args.optimizer == 'fusedlamb':
-    #     optimizer = FusedAdam(param_groups, lr=args.lr)
+    param_groups = optim_factory.param_groups_weight_decay(model_without_ddp, args.weight_decay)
+    optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
     loss_scaler = NativeScaler()
 
     if args.dataset == 'shoulderxray':
         criterion = torch.nn.BCEWithLogitsLoss()
-    elif args.dataset == 'chestxray':
-        if mixup_fn is not None:
-            # smoothing is handled with mixup label transform
-            criterion = SoftTargetBinaryCrossEntropy()
-        else:
-            criterion = torch.nn.BCEWithLogitsLoss()
-    elif args.dataset == 'covidx':
-        criterion = torch.nn.CrossEntropyLoss()
-    elif args.dataset == 'node21':
-        if args.loss_func == 'bce':
-            criterion = torch.nn.BCEWithLogitsLoss()
-        elif args.loss_func is None:
-            criterion = torch.nn.CrossEntropyLoss()
-    elif args.dataset == 'chexpert':
-        criterion = losses.CrossEntropyLoss()
     else:
         raise NotImplementedError
     # elif args.smoothing > 0.:
@@ -427,7 +351,6 @@ def main(args):
             model, criterion, data_loader_train,
             optimizer, device, epoch, loss_scaler,
             args.clip_grad, mixup_fn,
-            log_writer=log_writer,
             args=args
         )
 
@@ -439,46 +362,16 @@ def main(args):
             val_stats = evaluate_shoulderxray(data_loader_val, model, device, args)
             print(f"Average AUC on the val set images: {val_stats['auc_avg']:.4f}")
             print(f"Accuracy of the network on val images: {val_stats['acc1']:.1f}%")
-
-            if max_auc< val_stats['auc_avg']:
-                max_auc = val_stats['auc_avg']
-                save_model_state(model)
-
-            if max_accuracy < val_stats['acc1']:
-                max_accuracy = val_stats['acc1']
-                save_model_state(model)
-
-            if log_writer is not None:
-                log_writer.add_scalar('perf/auc_avg', val_stats['auc_avg'], epoch)
-                log_writer.add_scalar('perf/val_loss', val_stats['loss'], epoch)
-
-            log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                            **{f'val_{k}': v for k, v in val_stats.items()},
-                            'epoch': epoch,
-                            'n_parameters': n_parameters}
-
-            if args.output_dir and misc.is_main_process():
-                if log_writer is not None:
-                    log_writer.flush()
-                with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
-                    f.write(json.dumps(log_stats) + "\n")
-        #scheduler.step()
-    
+            max_auc = max(max_auc,val_stats['auc_avg'])
+            max_accuracy = max(max_accuracy,val_stats['acc1'])
+            save_model_state(model)
+            
     model.load_state_dict(torch.load(f'results/{args.model}/bestval_model.pth'))
     test_stats = evaluate_shoulderxray(data_loader_test, model, device, args)
     print(f"Average AUC on the test set images: {test_stats['auc_avg']:.4f}")
     print(f"Accuracy of the network on test images: {test_stats['acc1']:.1f}%")
     log_stats = {**{f'test_{k}': v for k, v in train_stats.items()},
                     'n_parameters': n_parameters}
-    if args.output_dir and misc.is_main_process():
-        if log_writer is not None:
-            log_writer.flush()
-        with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
-            f.write(json.dumps(log_stats) + "\n")
-    
-    total_time = time.time() - start_time
-    total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    print('Training time {}'.format(total_time_str))
 
 def save_model_state(model):
     directory = f"results/{args.model}"
