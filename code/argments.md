@@ -3,8 +3,8 @@
 set SAVE_DIR=results/pretraining/densenet121/
 
 python ./code/pretrain_shoulderxray_cnn.py ^
- --output_dir ${SAVE_DIR} ^
- --log_dir ${SAVE_DIR} ^
+ --output_dir results/pretraining/densenet121/ ^
+ --log_dir results/pretraining/densenet121/ ^
  --batch_size 8 ^
  --accum_iter 4 ^
  --mask_ratio 0.75 ^
