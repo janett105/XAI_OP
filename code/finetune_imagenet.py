@@ -9,16 +9,18 @@ from sklearn.model_selection import StratifiedKFold
 import pandas as pd
 import torchvision
 from torchvision import transforms
-from train_evaluate_test import train, evaluate
+from study.tutorial.train_evaluate_test import train, evaluate
 from torch.utils.data import DataLoader, Subset
 import copy
 import argparse
 import numpy as np
 import sys
+from util.datasets import build_dataset, build_dataset_shoulder_xray
 import visdom #python -m visdom.server
 import os
+from util.sampler import RASampler
 
-from torchvision.models import densenet12150, DenseNet121_WeightsResNet50_Weights
+from torchvision.models import densenet121, DenseNet121_Weights
 """
 mae pretraining : based on chest X-ray MAE study
     masking 비율 90%
@@ -41,7 +43,7 @@ def main():
     sys.stdout = open('resWults/imagenet_mae/logs.txt', 'w')
 
     parser = argparse.ArgumentParser(description="CNN/ViT X-ray classification")
-    parser.add_argument('--lr', default=1.5e-4, type=float, help='learning rate')
+    parser.add_argument('--lr', default=1.5e-5, type=float, help='learning rate')
     parser.add_argument('--epoch', default=75, type=int, help='number of epochs tp train for')
     parser.add_argument('--trainBatchSize', default=32, type=int, help='training batch size') # 16, 32, 64
     parser.add_argument('--testBatchSize', default=32, type=int, help='testing batch size')
@@ -73,25 +75,39 @@ class Solver(object):
         self.n_folds=config.n_folds
         self.skf = StratifiedKFold(n_splits=self.n_folds, shuffle=True)
         self.metrics_df = pd.DataFrame(columns=['acc', 'auc'])
+        self.build_timm_transform=True
+        self.num_workers=2
     
     def load_data(self):
-        self.data_transforms = {
-            "train" : transforms.Compose([transforms.RandAugment(magnitude=6)]),
-            'val' : transforms.Compose([]),
-            'test' : transforms.Compose([])
-        }
-        self.data_sets={
-            'train':torchvision.datasets.ImageFolder(root='data/DB_X-ray/train_to', transform=self.data_transforms['train']),
-            'val':torchvision.datasets.ImageFolder(root='data/DB_X-ray/val_to', transform=self.data_transforms['val']),
-            'test':torchvision.datasets.ImageFolder(root='data/DB_X-ray/test_to', transform=self.data_transforms['test']) 
-            # 'train_val':torchvision.datasets.CIFAR10(root='./data/train_val', train=True, transform=None, download=True),
-            # 'test':torchvision.datasets.CIFAR10(root='./data/test', train=False, transform=self.data_transforms['test'], download=True)
-        }
-        self.data_loaders = {
-                            'train': DataLoader(self.data_sets['train'], batch_size=self.train_batch_size, shuffle=True,num_workers=4),
-                            'val': DataLoader(self.data_sets['val'], batch_size=self.test_batch_size, shuffle=False,num_workers=4),
-                            'test': DataLoader(self.data_sets['test'], batch_size=self.test_batch_size, shuffle=False,num_workers=4)
-                            }
+        dataset_train = build_dataset_shoulder_xray(split='train', args=self)
+        dataset_val = build_dataset_shoulder_xray(split='val', args=self)
+        dataset_test = build_dataset_shoulder_xray(split='test', args=self)
+
+        sampler_train = RASampler(dataset_train, shuffle=True)
+        #sampler_train = torch.utils.data.RandomSampler(dataset_train)
+        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+        sampler_test = torch.utils.data.SequentialSampler(dataset_test)
+
+        data_loader_train = torch.utils.data.DataLoader(
+            dataset_train, sampler=sampler_train,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            drop_last=True,
+        )
+
+        data_loader_val = torch.utils.data.DataLoader(
+            dataset_val, sampler=sampler_val,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            drop_last=False
+        )
+
+        data_loader_test = torch.utils.data.DataLoader(
+            dataset_test, sampler=sampler_test,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            drop_last=False
+        )
 
     def load_model(self):
         if self.cuda:
@@ -100,32 +116,9 @@ class Solver(object):
         else: self.device = torch.device('cpu')
         print(f"device : {self.device}")
         
-        if self.model=='cnn':
-            self.model = torch.load('models/densenet121_CXR_0.3M_mae.pth').to(self.device)
-            print('densenet151 : MAE(chest X-ray)')
-        elif self.model=='vit':
-            self.model = torch.load('models/vit-s_CXR_0.3M_mae.pth').to(self.device)
-            print('ViT-small : MAE(chest X-ray)')
-        elif self.model=='cnn_proxy':
-
-            print('densenet151 : MAE(chest X-ray) -> rot_proxy(shoulder X-ray)')
-        elif self.model=='vit_proxy':
-
-            print('ViT-small : MAE(chest X-ray) -> rot_proxy(shoulder X-ray)')
-        elif self.model=='cnn_rnd_mae':
-
-            print('densenet151 : MAE(chest X-ray) -> MAE(shoulder X-ray, random masking/crop)')
-        elif self.model=='vit_rnd_mae':
-
-            print('ViT-small : MAE(chest X-ray) -> MAE(shoulder X-ray, random masking/crop)')
-        elif self.model=='cnn_cnt_mae':
-
-            print('densenet151 : MAE(chest X-ray) -> MAE(shoulder X-ray, center masking/crop)')
-        elif self.model=='vit_cnt_mae':
-
-            print('ViT-small : MAE(chest X-ray) -> MAE(shoulder X-ray, center masking/crop)')
+        if self.model=='densenet121':
+            self.model = densenet121(weights=DenseNet121_Weights).to(self.device)
         
-        print(f'Learning Rate : {self.lr}')
         self.criterion = nn.CrossEntropyLoss().to(self.device)
         self.optimizer = optim.AdamW(self.model.parameters(), lr=self.lr, betas=(0.9, 0.95))
         self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer)
