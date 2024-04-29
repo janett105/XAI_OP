@@ -84,10 +84,10 @@ def build_transform(is_train, args):
             input_size=args.input_size,
             is_training=True,
             color_jitter=args.color_jitter,
-            auto_augment=args.aa,
+            auto_augment='rand-m6-mstd0.5-inc1',
             interpolation='bicubic',
-            re_prob=args.reprob,
-            re_mode=args.remode,
+            re_prob=0., # 0.25가 default
+            re_mode='pixel',
             re_count=args.recount,
             mean=mean,
             std=std,
