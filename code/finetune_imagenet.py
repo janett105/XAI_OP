@@ -9,7 +9,7 @@ from sklearn.model_selection import StratifiedKFold
 import pandas as pd
 import torchvision
 from torchvision import transforms
-from tutorial.train_evaluate_test import train, evaluate
+from train_evaluate_test import train, evaluate
 from torch.utils.data import DataLoader, Subset
 import copy
 import argparse

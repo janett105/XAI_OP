@@ -118,7 +118,6 @@ def get_args_parser():
                         help='device to use for training / testing')
     return parser
 
-
 def main(args):
     misc.init_distributed_mode(args)
 
