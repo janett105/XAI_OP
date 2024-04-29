@@ -1,0 +1,423 @@
+Setting up a new session...
+device : cuda
+Downloading: "https://download.pytorch.org/models/vit_b_16-c867db91.pth" to C:\Users\xsamk/.cache\torch\hub\checkpoints\vit_b_16-c867db91.pth
+100%|██████████████████████████████████████████████████| 330M/330M [00:17<00:00, 19.4MB/s]
+=======1 fold=======
+
+===> epoch:1/5
+training..
+c:\Users\xsamk\anaconda3\Lib\site-packages\torch\nn\functional.py:5476: UserWarning: 1Torch was not compiled with flash attention. (Triggered internally at ..\aten\src\ATen\native\transformers\cuda\sdp_utils.cpp:263.)
+  attn_output = scaled_dot_product_attention(q, k, v, attn_mask, dropout_p, is_causal)     
+train result : (0.023809743369067157, 0.5164220824598184)
+training..
+val result : (0.7005607843399048, 0.5625)
+Checkpoint saved to results/densenet121/1Fold.txt
+
+===> epoch:2/5
+training..
+train result : (0.016226168120348893, 0.5220125786163522)
+training..
+val result : (0.690626609325409, 0.55)
+
+===> epoch:3/5
+training..
+train result : (0.01575642270806395, 0.5087351502445842)
+training..
+val result : (0.7242568612098694, 0.45625)
+
+===> epoch:4/5
+training..
+train result : (0.015692680146959095, 0.527603074772886)
+training..
+val result : (0.7323167204856873, 0.4375)
+
+===> epoch:5/5
+training..
+train result : (0.0158749849707992, 0.5408805031446541)
+training..
+val result : (0.6904939591884613, 0.5625)
+===> 1Fold BEST VAL_ACC: 56.250
+Backend QtAgg is interactive backend. Turning interactive mode on.
+PS C:\Users\xsamk\Documents\GitHub\XAI_OP> ^C
+PS C:\Users\xsamk\Documents\GitHub\XAI_OP>
+PS C:\Users\xsamk\Documents\GitHub\XAI_OP>  c:; cd 'c:\Users\xsamk\Documents\GitHub\XAI_OP'; & 'c:\Users\xsamk\anaconda3\python.exe' 'c:\Users\xsamk\.vscode\extensions\ms-python.debugpy-2024.4.0-win32-x64\bundled\libs\debugpy\adapter/../..\debugpy\launcher' '58278' '--' 'C:\Users\xsamk\Documents\GitHub\XAI_OP\main.py'
+Setting up a new session...
+device : cuda
+=======1 fold=======
+
+===> epoch:1/5
+training..
+c:\Users\xsamk\anaconda3\Lib\site-packages\torch\nn\functional.py:5476: UserWarning: 1Torch was not compiled with flash attention. (Triggered internally at ..\aten\src\ATen\native\transformers\cuda\sdp_utils.cpp:263.)
+  attn_output = scaled_dot_product_attention(q, k, v, attn_mask, dropout_p, is_causal)     
+train result : (0.02517019210038362, 0.5003494060097834)
+training..
+val result : (0.6855778932571411, 0.5625)
+Checkpoint saved to results/vit_b_16/1Fold.pth
+
+===> epoch:2/5
+training..
+train result : (0.015534515057081057, 0.5471698113207547)
+training..
+val result : (0.6842885375022888, 0.55)
+
+===> epoch:3/5
+training..
+train result : (0.015599397935985047, 0.5534591194968553)
+training..
+val result : (0.6728435397148133, 0.5875)
+Checkpoint saved to results/vit_b_16/1Fold.pth
+
+===> epoch:4/5
+training..
+train result : (0.015609333485732844, 0.5366876310272537)
+training..
+val result : (0.7049969553947448, 0.5625)
+
+===> epoch:5/5
+training..
+train result : (0.016055622542345965, 0.5373864430468204)
+training..
+val result : (0.6845125913619995, 0.575)
+===> 1Fold BEST VAL_ACC: 58.750
+testing..
+===> 1Fold TEST_ACC: 59.903
+=======2 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.01557358529832628, 0.5432960893854749)
+training..
+val result : (0.6930562674999237, 0.5660377358490566)
+Checkpoint saved to results/vit_b_16/2Fold.pth
+
+===> epoch:2/5
+training..
+train result : (0.015869961726812667, 0.5202513966480447)
+training..
+val result : (0.6953964829444885, 0.4716981132075472)
+
+===> epoch:3/5
+training..
+train result : (0.015514637540887903, 0.5509776536312849)
+training..
+val result : (0.6970791220664978, 0.4779874213836478)
+
+===> epoch:4/5
+training..
+train result : (0.015245594006997567, 0.5768156424581006)
+training..
+val result : (0.6740093350410461, 0.5786163522012578)
+Checkpoint saved to results/vit_b_16/2Fold.pth
+
+===> epoch:5/5
+training..
+train result : (0.015538871582643485, 0.5377094972067039)
+training..
+val result : (0.6886272668838501, 0.5094339622641509)
+===> 2Fold BEST VAL_ACC: 57.862
+testing..
+===> 2Fold TEST_ACC: 61.836
+=======3 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.015228045016159247, 0.5558659217877095)
+training..
+val result : (0.6804345488548279, 0.5974842767295597)
+Checkpoint saved to results/vit_b_16/3Fold.pth
+
+===> epoch:2/5
+training..
+train result : (0.016649437421633873, 0.5139664804469274)
+training..
+val result : (0.7072660803794861, 0.4591194968553459)
+
+===> epoch:3/5
+training..
+train result : (0.015952473128283465, 0.5307262569832403)
+training..
+val result : (0.7855195164680481, 0.4339622641509434)
+
+===> epoch:4/5
+training..
+train result : (0.01559131539898154, 0.5223463687150838)
+training..
+val result : (0.6846503734588623, 0.5471698113207547)
+
+===> epoch:5/5
+training..
+train result : (0.015300326200179112, 0.5649441340782123)
+training..
+val result : (0.6794594168663025, 0.5786163522012578)
+===> 3Fold BEST VAL_ACC: 59.748
+testing..
+===> 3Fold TEST_ACC: 61.836
+=======4 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.0153967324303992, 0.5405027932960894)
+training..
+val result : (0.7179277777671814, 0.4276729559748428)
+Checkpoint saved to results/vit_b_16/4Fold.pth
+
+===> epoch:2/5
+training..
+train result : (0.015860069269015464, 0.5244413407821229)
+training..
+val result : (0.6980446338653564, 0.5660377358490566)
+Checkpoint saved to results/vit_b_16/4Fold.pth
+
+===> epoch:3/5
+training..
+train result : (0.015442504941681284, 0.5439944134078212)
+training..
+val result : (0.6792697310447693, 0.5786163522012578)
+Checkpoint saved to results/vit_b_16/4Fold.pth
+
+===> epoch:4/5
+training..
+train result : (0.015870096977846124, 0.526536312849162)
+training..
+val result : (0.7291635274887085, 0.5660377358490566)
+
+===> epoch:5/5
+training..
+train result : (0.015315463071987952, 0.539804469273743)
+training..
+val result : (0.6851754665374756, 0.5660377358490566)
+===> 4Fold BEST VAL_ACC: 57.862
+testing..
+===> 4Fold TEST_ACC: 58.937
+=======5 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.01543347249796361, 0.5593575418994413)
+training..
+val result : (0.7395705342292785, 0.44025157232704404)
+Checkpoint saved to results/vit_b_16/5Fold.pth
+
+===> epoch:2/5
+training..
+train result : (0.016065093793986757, 0.5139664804469274)
+training..
+val result : (0.7188071966171264, 0.5660377358490566)
+Checkpoint saved to results/vit_b_16/5Fold.pth
+
+===> epoch:3/5
+training..
+train result : (0.016109671151196516, 0.5314245810055865)
+training..
+val result : (0.7209300875663758, 0.4528301886792453)
+
+===> epoch:4/5
+training..
+train result : (0.015767452922868137, 0.5139664804469274)
+training..
+val result : (0.6818555593490601, 0.5849056603773585)
+Checkpoint saved to results/vit_b_16/5Fold.pth
+
+===> epoch:5/5
+training..
+train result : (0.015326561191935598, 0.5488826815642458)
+training..
+val result : (0.6771108269691467, 0.5911949685534591)
+Checkpoint saved to results/vit_b_16/5Fold.pth
+===> 5Fold BEST VAL_ACC: 59.119
+testing..
+===> 5Fold TEST_ACC: 58.454
+=======6 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.015279929284696226, 0.5600558659217877)
+training..
+val result : (0.7238212823867798, 0.4779874213836478)
+Checkpoint saved to results/vit_b_16/6Fold.pth
+
+===> epoch:2/5
+training..
+train result : (0.015608635949499813, 0.5453910614525139)
+training..
+val result : (0.6839540958404541, 0.5660377358490566)
+Checkpoint saved to results/vit_b_16/6Fold.pth
+
+===> epoch:3/5
+training..
+train result : (0.015183355160701422, 0.5572625698324022)
+training..
+val result : (0.687162971496582, 0.5660377358490566)
+
+===> epoch:4/5
+training..
+train result : (0.015295003843896184, 0.5412011173184358)
+training..
+val result : (0.6849965572357177, 0.559748427672956)
+
+===> epoch:5/5
+training..
+train result : (0.015239068784831483, 0.5726256983240223)
+training..
+val result : (0.6929224967956543, 0.5157232704402516)
+===> 6Fold BEST VAL_ACC: 56.604
+testing..
+===> 6Fold TEST_ACC: 57.971
+=======7 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.015273403356104722, 0.5537709497206704)
+training..
+val result : (0.674048662185669, 0.5660377358490566)
+Checkpoint saved to results/vit_b_16/7Fold.pth
+
+===> epoch:2/5
+training..
+train result : (0.01519226065388432, 0.5439944134078212)
+training..
+val result : (0.6875422835350037, 0.5660377358490566)
+
+===> epoch:3/5
+training..
+train result : (0.015301186950118454, 0.5467877094972067)
+training..
+val result : (0.6790621757507325, 0.610062893081761)
+Checkpoint saved to results/vit_b_16/7Fold.pth
+
+===> epoch:4/5
+training..
+train result : (0.015152433271761294, 0.5523743016759777)
+training..
+val result : (0.6755915641784668, 0.5534591194968553)
+
+===> epoch:5/5
+training..
+train result : (0.015322172730057327, 0.5495810055865922)
+training..
+val result : (0.690092808008194, 0.5660377358490566)
+===> 7Fold BEST VAL_ACC: 61.006
+testing..
+===> 7Fold TEST_ACC: 51.691
+=======8 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.015282168888751372, 0.5432960893854749)
+training..
+val result : (0.6931712090969085, 0.5660377358490566)
+Checkpoint saved to results/vit_b_16/8Fold.pth
+
+===> epoch:2/5
+training..
+train result : (0.015143644279903836, 0.5656424581005587)
+training..
+val result : (0.7238063931465148, 0.44654088050314467)
+
+===> epoch:3/5
+training..
+train result : (0.015244828153539587, 0.5691340782122905)
+training..
+val result : (0.6940839111804962, 0.5660377358490566)
+
+===> epoch:4/5
+training..
+train result : (0.015167894746050422, 0.5656424581005587)
+training..
+val result : (0.6796437978744507, 0.6037735849056604)
+Checkpoint saved to results/vit_b_16/8Fold.pth
+
+===> epoch:5/5
+training..
+train result : (0.015173622649392962, 0.5691340782122905)
+training..
+val result : (0.7262700796127319, 0.5660377358490566)
+===> 8Fold BEST VAL_ACC: 60.377
+testing..
+===> 8Fold TEST_ACC: 59.903
+=======9 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.015239040527814699, 0.5607541899441341)
+training..
+val result : (0.6820847630500794, 0.5283018867924528)
+Checkpoint saved to results/vit_b_16/9Fold.pth
+
+===> epoch:2/5
+training..
+train result : (0.015397629266903724, 0.526536312849162)
+training..
+val result : (0.6925617814064026, 0.5157232704402516)
+
+===> epoch:3/5
+training..
+train result : (0.015251841221326664, 0.5593575418994413)
+training..
+val result : (0.6852135300636292, 0.5660377358490566)
+Checkpoint saved to results/vit_b_16/9Fold.pth
+
+===> epoch:4/5
+training..
+train result : (0.015206352428153708, 0.5572625698324022)
+training..
+val result : (0.684647160768509, 0.5660377358490566)
+
+===> epoch:5/5
+training..
+train result : (0.015273844489344844, 0.5544692737430168)
+training..
+val result : (0.6907577753067017, 0.5157232704402516)
+===> 9Fold BEST VAL_ACC: 56.604
+testing..
+===> 9Fold TEST_ACC: 57.971
+=======10 fold=======
+
+===> epoch:1/5
+training..
+train result : (0.015220654334551022, 0.5453910614525139)
+training..
+val result : (0.6916717767715455, 0.5283018867924528)
+Checkpoint saved to results/vit_b_16/10Fold.pth
+
+===> epoch:2/5
+training..
+train result : (0.015171319820262768, 0.5572625698324022)
+training..
+val result : (0.6812093734741211, 0.559748427672956)
+Checkpoint saved to results/vit_b_16/10Fold.pth
+
+===> epoch:3/5
+training..
+train result : (0.015171073954782368, 0.5712290502793296)
+training..
+val result : (0.6794209957122803, 0.5471698113207547)
+
+===> epoch:4/5
+training..
+train result : (0.015126054463563141, 0.5649441340782123)
+training..
+val result : (0.6802647233009338, 0.5786163522012578)
+Checkpoint saved to results/vit_b_16/10Fold.pth
+
+===> epoch:5/5
+training..
+train result : (0.015349208190117354, 0.553072625698324)
+training..
+val result : (0.6806023716926575, 0.5660377358490566)
+===> 10Fold BEST VAL_ACC: 57.862
+testing..
+===> 10Fold TEST_ACC: 63.285
+10 Fold TEST_Acc:
+        acc
+0  0.599034
+1  0.618357
+2  0.618357
+3  0.589372
+4  0.584541
+5   0.57971
+6  0.516908
+7  0.599034
+8   0.57971
+9   0.63285
+Final test Acc: 0.592 (0.032)
