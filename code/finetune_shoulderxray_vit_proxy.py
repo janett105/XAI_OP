@@ -19,7 +19,7 @@ from util.multi_label_loss import SoftTargetBinaryCrossEntropy
 
 import util.lr_decay as lrd
 import util.misc as misc
-from util.datasets import build_dataset, build_dataset_shoulder_xray
+from util.datasets import build_dataset_shoulder_xray
 from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 import models_vit
@@ -31,12 +31,20 @@ from libauc import losses
 from torchvision import models
 import timm.optim.optim_factory as optim_factory
 from collections import OrderedDict
+from PIL import Image
+from util.calculate_mean_std import Calculate_mean_std
+from util.imagerotation import ImageRotation
+from util.dataloader_proxy import DataLoaderWrapper
+import algorithms as alg
+from torchvision import transforms
+import matplotlib.pyplot as plt
+   
 
 def get_args_parser():
     parser = argparse.ArgumentParser('MAE fine-tuning for image classification', add_help=False)
     parser.add_argument('--batch_size', default=64, type=int,
                         help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
-    parser.add_argument('--epochs', default=100, type=int)
+    parser.add_argument('--epochs', default=75, type=int)
     parser.add_argument('--accum_iter', default=1, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
@@ -63,7 +71,7 @@ def get_args_parser():
     parser.add_argument('--layer_decay', type=float, default=0.55,
                         help='layer-wise lr decay from ELECTRA/BEiT')
     # 1e-5, 1e-6, 1e-7 시도하기
-    parser.add_argument('--min_lr', type=float, default=1e-6, metavar='LR',
+    parser.add_argument('--min_lr', type=float, default=1e-5, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0')
 
     parser.add_argument('--warmup_epochs', type=int, default=0, metavar='N',
@@ -132,7 +140,7 @@ def get_args_parser():
                         help='Perform evaluation only')
     parser.add_argument('--dist_eval', action='store_false', default=False,
                         help='Enabling distributed evaluation (recommended during training for faster monitor')
-    parser.add_argument('--num_workers', default=2, type=int)
+    parser.add_argument('--num_workers', default=4, type=int)
     parser.add_argument('--pin_mem', action='store_true',
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
@@ -152,8 +160,8 @@ def get_args_parser():
     parser.add_argument('--fixed_lr', action='store_true', default=False)
     parser.add_argument('--vit_dropout_rate', type=float, default=0,
                         help='Dropout rate for ViT blocks (default: 0.0)')
-    parser.add_argument("--build_timm_transform", action='store_true', default=True)
-    parser.add_argument("--aug_strategy", default='simclr_with_randrotation', type=str, help="strategy for data augmentation")
+    parser.add_argument("--build_timm_transform", action='store_true', default=False)
+    parser.add_argument("--aug_strategy", default='imagerotation', type=str, help="strategy for data augmentation")
     parser.add_argument("--dataset", default='shoulderxray', type=str)
 
     parser.add_argument('--repeated_aug', action='store_true', default=True)
@@ -175,6 +183,7 @@ def get_args_parser():
     return parser
 
 def main(args):
+    # 1. GPU 분산 학습 설정 초기화
     misc.init_distributed_mode(args)
 
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
@@ -193,10 +202,17 @@ def main(args):
 
     cudnn.benchmark = True
 
+    # 2. 데이터셋 로딩
     dataset_train = build_dataset_shoulder_xray(split='train', args=args)
     dataset_val = build_dataset_shoulder_xray(split='val', args=args)
     dataset_test = build_dataset_shoulder_xray(split='test', args=args)
 
+    #print(f"dataset_train 개수: {len(dataset_train)}")
+
+    dataset_train_rotated = build_dataset_shoulder_xray(split='train_rotation', args=args)
+    dataset_val_rotated = build_dataset_shoulder_xray(split='val', args=args)
+    dataset_test_rotated = build_dataset_shoulder_xray(split='test', args=args)
+    
     if args.distributed: 
         num_tasks = misc.get_world_size()
         global_rank = misc.get_rank()
@@ -225,13 +241,16 @@ def main(args):
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
         sampler_test = torch.utils.data.SequentialSampler(dataset_test)
+    
+    """# proxy_task를 위한 x-ray이미지의 평균 표준편차 구하기
+    total_dataset = dataset_train + dataset_val + dataset_test
+    mean, std = Calculate_mean_std(total_dataset)
+    print("Calculated Mean: ", mean)
+    print("Calculated Std: ", std)
+    xray_mean = [-0.2759, -0.2759, -0.2759]
+    xray_std = [0.9296, 0.9296, 0.9296]"""
 
-    """if args.log_dir is not None and not args.eval:
-        os.makedirs(args.log_dir, exist_ok=True)
-        log_writer = SummaryWriter(log_dir=args.log_dir)
-    else:
-        log_writer = None"""
-
+    # 4. 데이터 로더 설정: 모델에 데이터 공급
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
@@ -255,16 +274,17 @@ def main(args):
         pin_memory=args.pin_mem,
         drop_last=False
     )
-
-    mixup_fn = None
-    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
-    if mixup_active:
-        print("Mixup is activated!")
-        mixup_fn = Mixup(
-            mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
-            prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
-            label_smoothing=args.smoothing, num_classes=args.nb_classes)
     
+    data_loader_train_rotated = torch.utils.data.DataLoader(
+        dataset_train, sampler=sampler_train,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        pin_memory=args.pin_mem,
+        drop_last=True,
+    )
+    
+    
+    # 6. 모델 초기화 및 설정
     if 'vit' in args.model:
         model = models_vit.__dict__[args.model](
             img_size=args.input_size,
@@ -273,11 +293,8 @@ def main(args):
             drop_path_rate=args.drop_path,
             global_pool=args.global_pool,
         )
-        
-    """# binary classification을 위한 model classifier(FC layer) 변경
-    num_ftrs = model.classifier.in_features
-    model.classifier = torch.nn.Linear(num_ftrs, 1, bias=True)"""
     
+    # pretrain 된 모델의 가중치 불러오기
     if args.finetune and not args.eval:
         checkpoint = torch.load(args.finetune, map_location='cpu')
 
@@ -341,16 +358,7 @@ def main(args):
         )
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
     loss_scaler = NativeScaler()
-
-    if args.dataset == 'shoulderxray':
-        criterion = torch.nn.BCEWithLogitsLoss()
-    else:
-        raise NotImplementedError
-    # elif args.smoothing > 0.:
-    #     criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
-
-    # if
-    # criterion = torch.nn.BCEWithLogitsLoss()
+    criterion = torch.nn.BCEWithLogitsLoss()  
 
     print("criterion = %s" % str(criterion))
 
@@ -361,41 +369,83 @@ def main(args):
         print(f"Average AUC of the network on the test set images: {test_stats['auc_avg']:.4f}")
         print(f"Accuracy of the network on the test set images: {test_stats['acc1']:.4f}")
         exit(0)
+        
 
+    # 5-2. Mixup
+    mixup_fn = None
+    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
+    if mixup_active:
+        print("Mixup is activated!")
+        mixup_fn = Mixup(
+            mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
+            prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
+            label_smoothing=args.smoothing, num_classes=args.nb_classes)
+
+    # 7. 학습 및 평가
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
+    
+    print("Training on rotated images...")
+    for epoch in range(70):
+        train_model(model, data_loader_train_rotated,  
+                optimizer, criterion, device, loss_scaler,
+                model_without_ddp, epoch)
+        if epoch % args.eval_interval == 0 or epoch + 1 == args.epochs:
+            misc.save_model(args=args, model=model, model_without_ddp=model_without_ddp, 
+                optimizer=optimizer, loss_scaler=loss_scaler, epoch=epoch)
+    
+    model.load_state_dict(torch.load(f'results/{args.model}/bestval_model.pth'))
+    test_model(model, data_loader_test, device, args)
+        
+    # 원본 데이터셋으로 모델 학습
+    print("Re-training on original images...")
     max_accuracy = 0.0
     max_auc = 0.0
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)
-        train_stats = train_one_epoch(
-            model, criterion, data_loader_train,
-            optimizer, device, epoch, loss_scaler,
-            args.clip_grad, mixup_fn,
-            args=args
-        )
-
-        if args.output_dir and (epoch % args.eval_interval == 0 or epoch + 1 == args.epochs):
-            misc.save_model(
-                args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
-                loss_scaler=loss_scaler, epoch=epoch)
-
-            val_stats = evaluate_shoulderxray(data_loader_val, model, device, args)
-            print(f"Average AUC on the val set images: {val_stats['auc_avg']:.4f}")
-            print(f"Accuracy of the network on val images: {val_stats['acc1']:.1f}%")
-            max_auc = max(max_auc,val_stats['auc_avg'])
-            max_accuracy = max(max_accuracy,val_stats['acc1'])
-            save_model_state(model)
+        train_stats = train_model(model, data_loader_train,  
+            optimizer, criterion, device, loss_scaler,
+            model_without_ddp, epoch)
             
+        if epoch % args.eval_interval == 0 or epoch + 1 == args.epochs:
+            misc.save_model(args=args, model=model, model_without_ddp=model_without_ddp, 
+                optimizer=optimizer, loss_scaler=loss_scaler, epoch=epoch)
+            save_model_state(val_model(model, data_loader_val, device, 
+                                max_accuracy, max_auc))    
+                
     model.load_state_dict(torch.load(f'results/{args.model}/bestval_model.pth'))
-    test_stats = evaluate_shoulderxray(data_loader_test, model, device, args)
-    print(f"Average AUC on the test set images: {test_stats['auc_avg']:.4f}")
-    print(f"Accuracy of the network on test images: {test_stats['acc1']:.1f}%")
-    
+    test_model(model, data_loader_test, device, args)
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Training time {}'.format(total_time_str))
+
+def train_model(model, data_loader_train,  
+                optimizer, criterion, device, loss_scaler,
+                model_without_ddp, epoch
+                ):
+    train_stats = train_one_epoch(
+        model, criterion, data_loader_train,
+        optimizer, device, epoch, loss_scaler,
+        args.clip_grad, 
+        args=args
+    )
+  
+def val_model(model, data_loader_val, device, 
+              max_accuracy, max_auc):
+    val_stats = evaluate_shoulderxray(data_loader_val, model, device, args)
+    print("val")
+    print(f"Average AUC on the val set images: {val_stats['auc_avg']:.4f}")
+    print(f"Accuracy of the network on val images: {val_stats['acc1']:.1f}%")
+    max_auc = max(max_auc,val_stats['auc_avg'])
+    max_accuracy = max(max_accuracy,val_stats['acc1'])
+    return model
+       
+def test_model(model, data_loader_test, device, args):
+    test_stats = evaluate_shoulderxray(data_loader_test, model, device, args)
+    print("test")
+    print(f"Average AUC on the test set images: {test_stats['auc_avg']:.4f}")
+    print(f"Accuracy of the network on test images: {test_stats['acc1']:.1f}%")
 
 def save_model_state(model):
     directory = f"results/{args.model}"

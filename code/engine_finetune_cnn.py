@@ -160,7 +160,11 @@ def accuracy(output, target, topk=(1,)):
 
 @torch.no_grad()
 def evaluate_shoulderxray(data_loader, model, device, args):
-    criterion = torch.nn.BCEWithLogitsLoss()
+    if args.dataset == 'shoulderxray':
+        criterion = torch.nn.BCEWithLogitsLoss()
+        #criterion = torch.nn.CrossEntropyLoss()
+    else:
+        raise NotImplementedError
 
     metric_logger = misc.MetricLogger(delimiter="  ")
     header = 'Test:'
