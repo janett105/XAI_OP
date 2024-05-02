@@ -17,12 +17,13 @@ python ./code/pretrain_shoulderxray_cnn.py ^
  --datasets_names shoulder_xray ^
  --checkpoint_type "smp_encoder" ^
  --distributed ^
+ --crop_ratio 0.8
  --device
 ```
-
 ```
 set SAVE_DIR=results/shoulder_mae/densenet121/
 set DATASET_DIR=data/DB_X-ray/
+
 python ./code/finetune_shoulderxray_cnn.py ^
 --output_dir %SAVE_DIR% ^
 --log_dir %SAVE_DIR% ^
@@ -45,7 +46,6 @@ python ./code/finetune_shoulderxray_cnn.py ^
 --eval_interval 10 ^
 --finetune "models/densenet121_SHDR_1.4K_mae_800epc.pth"
 ```
-
 # Pre-training(shoulder) - ViT-S
 ```
 python -m torch.distributed.launch --nproc_per_node=8 ^
@@ -67,7 +67,6 @@ python -m torch.distributed.launch --nproc_per_node=8 ^
 ```
 
 # Finetuning(shoulder) - densenet121
-
 ```
 set SAVE_DIR=results/densenet121/
 set DATASET_DIR=data/DB_X-ray/
