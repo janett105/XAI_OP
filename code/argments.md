@@ -1,10 +1,10 @@
 # Pretraining(shoulder) -> Finetuning(shoulder) : densenet 121
 ```
-set SAVE_DIR=results/pretraining/densenet121/
+set SAVE_DIR=results/shoulder_mae/densenet121/centercrop
 
 python ./code/pretrain_shoulderxray_cnn.py ^
- --output_dir results/pretraining/densenet121/ ^
- --log_dir results/pretraining/densenet121/ ^
+ --output_dir %SAVE_DIR% ^
+ --log_dir %SAVE_DIR% ^
  --batch_size 8 ^
  --accum_iter 4 ^
  --mask_ratio 0.75 ^
