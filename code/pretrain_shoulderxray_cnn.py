@@ -33,7 +33,7 @@ from util.misc import NativeScalerWithGradNormCount as NativeScaler
 from models_mae_cnn import MaskedAutoencoderCNN
 
 from engine_pretrain import train_one_epoch
-from util.dataloader_med import CheXpert, ChestX_ray14, MIMIC
+from util.dataloader_med import ShoulderXray
 import cv2
 from util.custom_transforms import custom_train_transform
 from util.sampler import RASampler
@@ -116,8 +116,23 @@ def get_args_parser():
     parser.add_argument('--device', action='store_false', 
                         default=torch.cuda.is_available(),
                         help='device to use for training / testing')
+    parser.add_argument("--crop_ratio", default=0.8, type=float)
     return parser
 
+class CustomCrop:
+    def __init__(self, args):
+        self.crop_ratio = args.crop_ratio  # 이미지에서 잘라낼 비율
+        self.random_resized_crop = transforms.RandomResizedCrop(args.input_size, scale=(args.resize_ratio_min, args.resize_ratio_max),interpolation=3),  # 3 is bicubic
+
+    def __call__(self, img):
+        w, h = img.size
+        # 전체 이미지 중 원하는 비율만큼만 사용하여 crop할 부분을 정의
+        new_w, new_h = int(self.crop_ratio * w), int(self.crop_ratio * h)
+        # 이미지를 crop_ratio에 따라 잘라냅니다 (이 예에서는 중앙에서 잘라내기)
+        cropped_img = img.crop(((w - new_w) // 2, (h - new_h) // 2, (w + new_w) // 2, (h + new_h) // 2))
+        # RandomResizedCrop을 적용
+        return self.random_resized_crop(cropped_img)
+    
 def main(args):
     misc.init_distributed_mode(args)
 
@@ -162,6 +177,7 @@ def main(args):
                 'shoulder_xray': [0.252, 0.252, 0.252]
                 }
     print(args.datasets_names)
+
     for dataset_name in args.datasets_names:
         dataset_mean = mean_dict[dataset_name]
         dataset_std = std_dict[dataset_name]
@@ -177,8 +193,7 @@ def main(args):
                 resize_ratio_min, resize_ratio_max = args.random_resize_range
                 print(resize_ratio_min, resize_ratio_max)
                 transform_train = transforms.Compose([
-                    transforms.RandomResizedCrop(args.input_size, scale=(resize_ratio_min, resize_ratio_max),
-                                                 interpolation=3),  # 3 is bicubic
+                    CustomCrop(args),
                     transforms.RandomHorizontalFlip(),
                     transforms.ToTensor(),
                     transforms.Normalize(dataset_mean, dataset_std)])
@@ -200,8 +215,8 @@ def main(args):
     #                            use_frontal=True, mode='train', class_index=-1, transform=transform_train,
     #                            heatmap_path=heatmap_path, pretraining=True)
     #     elif dataset_name == 'chestxray_nih':
-    #         dataset = ChestX_ray14('data/nih_chestxray', "data_splits/chestxray/train_official.txt", augment=transform_train, num_class=14,
-    #                                heatmap_path=heatmap_path, pretraining=True)
+            # dataset = ChestX_ray14('data/nih_chestxray', "data_splits/chestxray/train_official.txt", augment=transform_train, num_class=14,
+            #                        heatmap_path=heatmap_path, pretraining=True)
     #     elif dataset_name == 'mimic_cxr':
     #         dataset = MIMIC(path='data/mimic_cxr', version="chexpert", split="train", transform=transform_train, views=["AP", "PA"],
     #                         unique_patients=False, pretraining=True)
