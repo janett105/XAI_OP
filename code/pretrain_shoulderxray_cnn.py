@@ -33,7 +33,7 @@ from util.misc import NativeScalerWithGradNormCount as NativeScaler
 from models_mae_cnn import MaskedAutoencoderCNN
 
 from engine_pretrain import train_one_epoch
-from util.dataloader_med import ShoulderXray
+# from util.dataloader_med import ShoulderXray
 import cv2
 from util.custom_transforms import custom_train_transform
 from util.sampler import RASampler
@@ -120,9 +120,9 @@ def get_args_parser():
     return parser
 
 class CustomCrop:
-    def __init__(self, args):
+    def __init__(self, args, resize_ratio_min, resize_ratio_max):
         self.crop_ratio = args.crop_ratio  # 이미지에서 잘라낼 비율
-        self.random_resized_crop = transforms.RandomResizedCrop(args.input_size, scale=(args.resize_ratio_min, args.resize_ratio_max),interpolation=3),  # 3 is bicubic
+        self.random_resized_crop = transforms.RandomResizedCrop(args.input_size, scale=(resize_ratio_min, resize_ratio_max),interpolation=3)  # 3 is bicubic
 
     def __call__(self, img):
         w, h = img.size
@@ -193,7 +193,7 @@ def main(args):
                 resize_ratio_min, resize_ratio_max = args.random_resize_range
                 print(resize_ratio_min, resize_ratio_max)
                 transform_train = transforms.Compose([
-                    CustomCrop(args),
+                    CustomCrop(args, resize_ratio_min, resize_ratio_max),
                     transforms.RandomHorizontalFlip(),
                     transforms.ToTensor(),
                     transforms.Normalize(dataset_mean, dataset_std)])
