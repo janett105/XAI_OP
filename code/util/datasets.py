@@ -82,7 +82,7 @@ def build_dataset_shoulder_xray(split, args):
             mode = 'validation'
         else:
             mode= 'test'
-        dataset = datasets.ImageFolder(root=f'data/DB_X-ray/{mode}_to', transform=transform)
+        dataset = datasets.ImageFolder(root=f".data/DB_X-ray/{mode}_to", transform=transform)
     else:
         raise NotImplementedError
     
