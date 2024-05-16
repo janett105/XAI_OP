@@ -76,18 +76,14 @@ def build_dataset_shoulder_xray(split, args):
             transform = Augmentation(normalize="chestx-ray").get_augmentation("full_224", "val")
 
     if args.dataset == 'shoulderxray':
-        if split == 'train':
-            mode = 'train'
-        elif split == 'val':
-            mode = 'validation'
-        else:
-            mode= 'test'
-        dataset = datasets.ImageFolder(root=f".data/DB_X-ray/{mode}_to", transform=transform)
-    else:
-        raise NotImplementedError
-    
-    print("dataset:: ", dataset)
-    return dataset
+        if split == 'train':mode = 'train'
+        elif split == 'val':mode = 'validation'
+        else:mode= 'test'
+        
+        dataset = datasets.ImageFolder(root=f'data/DB_X-ray/{mode}_to', transform=transform)
+        
+        print("dataset:: ", dataset)
+        return dataset
 
 def build_transform(is_train, args):
     if args.norm_stats is not None:
@@ -146,4 +142,3 @@ def build_transform(is_train, args):
     t.append(transforms.ToTensor())
     t.append(transforms.Normalize(mean, std))
     return transforms.Compose(t)
-

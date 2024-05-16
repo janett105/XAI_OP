@@ -11,6 +11,8 @@ import torch
 import torchvision.transforms as transforms
 import pandas as pd
 import medpy.io
+from torchvision import datasets, transforms
+from torch.utils.data import Dataset
 
 NORMALIZATION_STATISTICS = {"self_learning_cubes_32": [[0.11303308354465243, 0.12595135887180803]],
                             "self_learning_cubes_64": [[0.11317437834743148, 0.12611378817031038]],
@@ -175,62 +177,28 @@ from torch.utils.data import Dataset
 
 
 # --------------------------------------------Downstream ChestX-ray14-------------------------------------------
-class ChestX_ray14(Dataset):
-    def __init__(self, data_dir, file, augment,
-                 num_class=2, img_depth=3, heatmap_path=None,
-                 pretraining=False):
-        self.img_list = []
-        self.img_label = []
 
-        with open(file, "r") as fileDescriptor:
-            line = True
-            while line:
-                line = fileDescriptor.readline()
-                if line:
-                    lineItems = line.split()
-                    imagePath = os.path.join(data_dir, lineItems[0])
-                    imageLabel = lineItems[1:num_class + 1]
-                    imageLabel = [int(i) for i in imageLabel]
-                    self.img_list.append(imagePath)
-                    self.img_label.append(imageLabel)
+# class ShoulderXray(datasets.ImageFolder):
+#     def __init__(self, root, transform=None, loader=datasets.folder.default_loader, heatmap_path=None):
+#         super(ShoulderXray, self).__init__(root, transform=transform, loader=loader)
+        
+#         if heatmap_path:
+#             self.heatmap = Image.open(heatmap_path).convert('RGB')
+#         else: self.heatmap = None
 
-        self.augment = augment
-        self.img_depth = img_depth
-        if heatmap_path is not None:
-            # self.heatmap = cv2.imread(heatmap_path)
-            self.heatmap = Image.open(heatmap_path).convert('RGB')
-        else:
-            self.heatmap = None
-        self.pretraining = pretraining
-
-    def __len__(self):
-        return len(self.img_list)
-
-    def __getitem__(self, index):
-
-        file = self.img_list[index]
-        label = self.img_label[index]
-
-        imageData = Image.open(file).convert('RGB')
-        if self.heatmap is None:
-            imageData = self.augment(imageData)
-            img = imageData
-            label = torch.tensor(label, dtype=torch.float)
-            if self.pretraining:
-                label = -1
-            return img, label
-        else:
-            # heatmap = Image.open('nih_bbox_heatmap.png')
-            heatmap = self.heatmap
-            # heatmap = torchvision.transforms.functional.to_pil_image(self.heatmap)
-            imageData, heatmap = self.augment(imageData, heatmap)
-            img = imageData
-            # heatmap = torch.tensor(np.array(heatmap), dtype=torch.float)
-            heatmap = heatmap.permute(1, 2, 0)
-            label = torch.tensor(label, dtype=torch.float)
-            if self.pretraining:
-                label = -1
-            return [img, heatmap], label
+#     def __getitem__(self, index):
+#         path, target = self.samples[index] # 기본 ImageFolder __getitem__ 메소드로부터 이미지와 레이블 가져오기
+#         sample = self.loader(path)
+#         if self.transform is not None:
+#             sample = self.transform(sample)
+        
+#         if self.heatmap:
+#             heatmap = self.heatmap
+#             if self.transform:
+#                 heatmap = self.transform(heatmap)
+#             return [sample, heatmap], torch.tensor(target, dtype=torch.float)
+#         else:
+#             return sample, torch.tensor(target, dtype=torch.float)
 
 class ChestX_ray14(Dataset):
     def __init__(self, data_dir, file, augment,
@@ -277,9 +245,7 @@ class ChestX_ray14(Dataset):
                 label = -1
             return img, label
         else:
-            # heatmap = Image.open('nih_bbox_heatmap.png')
             heatmap = self.heatmap
-            # heatmap = torchvision.transforms.functional.to_pil_image(self.heatmap)
             imageData, heatmap = self.augment(imageData, heatmap)
             img = imageData
             # heatmap = torch.tensor(np.array(heatmap), dtype=torch.float)
