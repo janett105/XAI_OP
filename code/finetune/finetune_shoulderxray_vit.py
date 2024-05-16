@@ -36,7 +36,7 @@ def get_args_parser():
     parser = argparse.ArgumentParser('MAE fine-tuning for image classification', add_help=False)
     parser.add_argument('--batch_size', default=64, type=int,
                         help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
-    parser.add_argument('--epochs', default=100, type=int)
+    parser.add_argument('--epochs', default=75, type=int)
     parser.add_argument('--accum_iter', default=1, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
@@ -132,7 +132,7 @@ def get_args_parser():
                         help='Perform evaluation only')
     parser.add_argument('--dist_eval', action='store_false', default=False,
                         help='Enabling distributed evaluation (recommended during training for faster monitor')
-    parser.add_argument('--num_workers', default=2, type=int)
+    parser.add_argument('--num_workers', default=4, type=int)
     parser.add_argument('--pin_mem', action='store_true',
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
@@ -273,10 +273,6 @@ def main(args):
             drop_path_rate=args.drop_path,
             global_pool=args.global_pool,
         )
-        
-    """# binary classification을 위한 model classifier(FC layer) 변경
-    num_ftrs = model.classifier.in_features
-    model.classifier = torch.nn.Linear(num_ftrs, 1, bias=True)"""
     
     if args.finetune and not args.eval:
         checkpoint = torch.load(args.finetune, map_location='cpu')
@@ -343,7 +339,10 @@ def main(args):
     loss_scaler = NativeScaler()
 
     if args.dataset == 'shoulderxray':
-        criterion = torch.nn.BCEWithLogitsLoss()
+        if mixup_fn is not None:
+            criterion = SoftTargetBinaryCrossEntropy()
+        else:
+            criterion = torch.nn.BCEWithLogitsLoss()
     else:
         raise NotImplementedError
     # elif args.smoothing > 0.:
