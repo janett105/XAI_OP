@@ -1,5 +1,6 @@
 data/
 models/
+medical_mae/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
