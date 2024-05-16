@@ -32,5 +32,5 @@ python ./code/finetune_shoulderxray_vit.py ^
 --drop_path 0 --mixup 0 --cutmix 0 --reprob 0 --vit_dropout_rate 0 ^
 --data_path %DATASET_DIR% ^
 --min_lr 1e-5 ^
---repeated_aug ^
+--repeated_aug
 ```

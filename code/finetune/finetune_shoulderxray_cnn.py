@@ -22,7 +22,7 @@ import util.misc as misc
 from util.datasets import build_dataset, build_dataset_shoulder_xray
 from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
-import models_vit
+import models.models_vit
 
 from engine_finetune_cnn import train_one_epoch,evaluate_shoulderxray, evaluate_chestxray
 from util.sampler import RASampler
@@ -54,9 +54,9 @@ def finetune_cnn(args):
     print("{}".format(args).replace(', ', ',\n'), file=writer)
 
 #------------------------------- Dataset 준비---------------------------------------------------
-    dataset_train = build_dataset_shoulder_xray(split='train', args=args)
-    dataset_val = build_dataset_shoulder_xray(split='val', args=args)
-    dataset_test = build_dataset_shoulder_xray(split='test', args=args)
+    dataset_train = build_dataset_shoulder_xray(split='train', args=args, logger=writer)
+    dataset_val = build_dataset_shoulder_xray(split='val', args=args, logger=writer)
+    dataset_test = build_dataset_shoulder_xray(split='test', args=args, logger=writer)
 
     sampler_train = torch.utils.data.RandomSampler(dataset_train)
     sampler_val = torch.utils.data.SequentialSampler(dataset_val)

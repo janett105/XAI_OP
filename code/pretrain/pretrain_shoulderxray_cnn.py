@@ -30,9 +30,9 @@ import timm.optim.optim_factory as optim_factory
 import util.misc as misc
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-from models_mae_cnn import MaskedAutoencoderCNN
+from models.models_mae_cnn import MaskedAutoencoderCNN
 
-from engine_pretrain import train_one_epoch
+from pretrain.engine_pretrain import train_one_epoch
 # from util.dataloader_med import ShoulderXray
 import cv2
 from util.custom_transforms import custom_train_transform

@@ -32,7 +32,7 @@ from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
 import code.models_mae_vit as models_mae_vit
 
-from engine_pretrain import train_one_epoch
+from code.pretrain.engine_pretrain import train_one_epoch
 from util.dataloader_med import CheXpert, ChestX_ray14, MIMIC, Shoulder_xray
 import cv2
 from util.custom_transforms import custom_train_transform

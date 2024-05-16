@@ -15,7 +15,7 @@ from timm.models.layers import trunc_normal_
 from timm.data.mixup import Mixup
 #from util.mixup_multi_label import Mixup
 
-from util.multi_label_loss import SoftTargetBinaryCrossEntropy
+from ..util.multi_label_loss import SoftTargetBinaryCrossEntropy
 
 import util.lr_decay as lrd
 import util.misc as misc
@@ -24,7 +24,7 @@ from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 import models_vit
 
-from engine_finetune_vit import train_one_epoch,evaluate_shoulderxray
+from finetune.engine_finetune_vit import train_one_epoch,evaluate_shoulderxray
 from util.sampler import RASampler
 #from apex.optimizers import FusedAdam
 from libauc import losses
@@ -175,7 +175,7 @@ def get_args_parser():
     return parser
 
 def main(args):
-    misc.init_distributed_mode(args)
+    # misc.init_distributed_mode(args)
 
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
     print("{}".format(args).replace(', ', ',\n'))
