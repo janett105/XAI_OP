@@ -89,6 +89,10 @@ def build_dataset(is_train, args):
 
 
 def build_transform(is_train, args):
+    """
+    train : 
+    val, eval : 이미지 확장 -> resize -> centercrop -> normalization
+    """
     if args.dataset == 'shoulderxray':
         mean = (0.5056, 0.5056, 0.5056)
         std = (0.252, 0.252, 0.252) 
@@ -120,12 +124,11 @@ def build_transform(is_train, args):
     else:
         crop_pct = 1.0
     size = int(args.input_size / crop_pct)
-    
-    t.append(
-        transforms.Resize(size, interpolation=PIL.Image.BICUBIC),  # to maintain same ratio w.r.t. 224 images
-    )
-    t.append(transforms.CenterCrop(args.input_size))
 
+    # resize : 짧은 쪽을 기준으로 이미지 crop (이미지 비율 유지)
+    t.append(transforms.Resize(size, interpolation=PIL.Image.BICUBIC))
+    # 이미지 확장 후 centercrop : 확대하지 않고 바로 resize할 시 중요한 부분이 더 많이 잘릴 수도 있기 때문\
+    t.append(transforms.CenterCrop(args.input_size))
     t.append(transforms.ToTensor())
     t.append(transforms.Normalize(mean, std))
     return transforms.Compose(t)
