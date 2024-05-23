@@ -31,7 +31,11 @@ python -m torch.distributed.launch --nproc_per_node=8 ^
  --blr 1.5e-4 --weight_decay 0.05 ^
  --num_workers 8 ^
  --input_size 224 ^
- --mask_strategy 'random' ^
  --random_resize_range 0.5 1.0 ^
- --datasets_names chexpert chestxray_nih
+ --datasets_names shoulder_xray ^
+ --batch_size 8 ^
+ --accum_iter 4 ^
+ --mask_strategy 'random' ^
+ --crop_ratio 0.8
 ```
+tensorboard --logdir=%SAVE_DIR%

@@ -22,7 +22,7 @@ import util.misc as misc
 from util.datasets import build_dataset, build_dataset_shoulder_xray
 from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
-import models_vit
+from models import models_vit
 
 from engine_finetune_vit import train_one_epoch,evaluate_shoulderxray
 from util.sampler import RASampler
@@ -115,9 +115,9 @@ def get_args_parser():
     parser.add_argument('--nb_classes', default=2, type=int,
                         help='number of the classification types')
 
-    parser.add_argument('--output_dir', default='results/vit-s/',
+    parser.add_argument('--output_dir', default='results/shoulder_mae/vit/',
                         help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default='results/vit-s',
+    parser.add_argument('--log_dir', default='results/shoulder_mae/vit/',
                         help='path where to tensorboard log')
     parser.add_argument('--device', action='store_false', 
                         default=torch.cuda.is_available(),
@@ -156,7 +156,7 @@ def get_args_parser():
     parser.add_argument("--aug_strategy", default='simclr_with_randrotation', type=str, help="strategy for data augmentation")
     parser.add_argument("--dataset", default='shoulderxray', type=str)
 
-    parser.add_argument('--repeated_aug', action='store_true', default=True)
+    parser.add_argument('--repeated_aug', action='store_true', default=False)
 
     parser.add_argument("--optimizer", default='adamw', type=str)
 
@@ -377,16 +377,14 @@ def main(args):
         )
 
         if args.output_dir and (epoch % args.eval_interval == 0 or epoch + 1 == args.epochs):
-            misc.save_model(
-                args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
-                loss_scaler=loss_scaler, epoch=epoch)
-
             val_stats = evaluate_shoulderxray(data_loader_val, model, device, args)
             print(f"Average AUC on the val set images: {val_stats['auc_avg']:.4f}")
             print(f"Accuracy of the network on val images: {val_stats['acc1']:.1f}%")
-            max_auc = max(max_auc,val_stats['auc_avg'])
-            max_accuracy = max(max_accuracy,val_stats['acc1'])
-            save_model_state(model)
+            if val_stats['auc_avg'] > max_auc:
+                max_auc = max(max_auc,val_stats['auc_avg'])
+                max_accuracy = max(max_accuracy,val_stats['acc1'])
+                misc.save_model(args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+                                loss_scaler=loss_scaler, epoch=epoch)
             
     model.load_state_dict(torch.load(f'results/{args.model}/bestval_model.pth'))
     test_stats = evaluate_shoulderxray(data_loader_test, model, device, args)
@@ -397,13 +395,10 @@ def main(args):
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Training time {}'.format(total_time_str))
 
-def save_model_state(model):
-    directory = f"results/{args.model}"
-    if not os.path.exists(directory):
-        os.makedirs(directory)  # 디렉토리가 없다면 생성
-    path = f"{directory}/bestval_model.pth"
-    torch.save(model.state_dict(), path)
-    print("Checkpoint saved to {}".format(path))
+# def save_model_state(model):
+#     path = f"{args.output_dir}/bestval_model.pth"
+#     torch.save(model.state_dict(), path)
+#     print("Checkpoint saved to {}".format(path))
 
 if __name__ == '__main__':
     os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'

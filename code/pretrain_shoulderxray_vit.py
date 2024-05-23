@@ -30,7 +30,8 @@ import timm.optim.optim_factory as optim_factory
 import util.misc as misc
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-import code.models_mae_vit as models_mae_vit
+from models import models_mae_vit as models_mae_vit
+#from models.models_mae_cnn import MaskedAutoencoderCNN
 
 from engine_pretrain import train_one_epoch
 from util.dataloader_med import CheXpert, ChestX_ray14, MIMIC, Shoulder_xray
@@ -108,12 +109,14 @@ def get_args_parser():
     parser.add_argument('--random_resize_range', type=float, nargs='+', default=['0.5', '1.0'],
                         help='RandomResizedCrop min/max ratio, default: None)')
     parser.add_argument('--fixed_lr', action='store_true', default=False)
-    parser.add_argument('--mask_strategy', default='random', type=str)
-
     parser.add_argument('--repeated-aug', action='store_true', default=False)
-    parser.add_argument('--datasets_names', type=str, nargs='+', default=[])
-
-    parser.add_argument('--distributed', type=bool, default=True, action='store_false')
+    parser.add_argument('--datasets_names', type=str, nargs='+', default=['shoulder_xray'])
+    parser.add_argument('--distributed', default=False, action='store_true')
+    
+    parser.add_argument('--mask_strategy', default='random', type=str)
+    parser.add_argument("--crop_ratio", default=0.8, type=float)
+    parser.add_argument('--finetune', default='best_models/vit-s_CXR_0.3M_mae.pth',
+                        help='finetune from checkpoint')
     return parser
 
 
