@@ -2,7 +2,7 @@ from pathlib import Path
 import argparse
 import os
 from study.tutorial.finetune_shoulderxray_den import finetune_cnn
-from finetune_shoulderxray_vit import finetune_vit
+from finetune.finetune_shoulderxray_vit import finetune_vit
 import torch
 import util.misc as misc
 
@@ -39,8 +39,8 @@ def get_args_parser():
                         help='epochs to warmup LR')
 
     # Augmentation parameters
-    # parser.add_argument('--color_jitter', type=float, default=None, metavar='PCT',
-    #                     help='Color jitter factor (enabled only when not using Auto/RandAug)')
+    parser.add_argument('--color_jitter', type=float, default=None, metavar='PCT',
+                        help='Color jitter factor (enabled only when not using Auto/RandAug)')
     parser.add_argument('--aa', type=str, default='rand-m6-mstd0.5-inc1', metavar='NAME',
                         help='Use AutoAugment policy. "v0" or "original". " + "(default: rand-m9-mstd0.5-inc1)'),
     parser.add_argument('--smoothing', type=float, default=0.1,
@@ -95,7 +95,7 @@ def get_args_parser():
                         help='start epoch')
     parser.add_argument('--eval', action='store_true',
                         help='Perform evaluation only')
-    # parser.add_argument('--dist_eval', action='store_false', default=False,
+    # parser.add_argument('--dist_eval', action='store_true', default=False,
     #                     help='Enabling distributed evaluation (recommended during training for faster monitor')
     parser.add_argument('--num_workers', default=2, type=int)
     parser.add_argument('--pin_mem', action='store_true', default=True,
@@ -117,8 +117,9 @@ def get_args_parser():
     parser.add_argument('--fixed_lr', action='store_true', default=False)
     parser.add_argument('--vit_dropout_rate', type=float, default=0,
                         help='Dropout rate for ViT blocks (default: 0.0)')
-    parser.add_argument("--build_timm_transform", action='store_true', default=True)
-    parser.add_argument("--aug_strategy", default='simclr_with_randrotation', type=str, help="strategy for data augmentation")
+    parser.add_argument("--build_timm_transform", action='store_false', default=True)
+    parser.add_argument("--aug_strategy", default='simclr_with_randrotation', type=str, 
+                        help="strategy for data augmentation") # (timm_transform이 아닐 때 진행)
     parser.add_argument("--dataset", default='shoulderxray', type=str)
     parser.add_argument('--repeated_aug', action='store_true', default=True)
     parser.add_argument("--optimizer", default='adamw', type=str)

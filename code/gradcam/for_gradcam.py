@@ -1,36 +1,36 @@
 import argparse
 import datetime
-import json
 import numpy as np
 import os
-import time
 from pathlib import Path
 
 import torch
 import torch.backends.cudnn as cudnn
-from torch.utils.tensorboard import SummaryWriter
 
 # assert timm.__version__ == "0.3.2" # version check
 from timm.models.layers import trunc_normal_
 from timm.data.mixup import Mixup
 #from util.mixup_multi_label import Mixup
 
-from ..util.multi_label_loss import SoftTargetBinaryCrossEntropy
-
 import util.lr_decay as lrd
 import util.misc as misc
-from util.datasets import build_dataset, build_dataset_shoulder_xray
+from util.datasets import build_dataset_shoulder_xray
 from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
-from models import models_vit
 
-from finetune.engine_finetune_vit import train_one_epoch,evaluate_shoulderxray
+from engine_finetune_cnn import train_one_epoch,evaluate_shoulderxray, evaluate_chestxray
 from util.sampler import RASampler
 #from apex.optimizers import FusedAdam
 from libauc import losses
 from torchvision import models
 import timm.optim.optim_factory as optim_factory
 from collections import OrderedDict
+
+
+from gradcam.utils import visualize_cam
+from gradcam import GradCAM, GradCAMpp
+import torchvision.transforms as transforms
+
 
 def get_args_parser():
     parser = argparse.ArgumentParser('MAE fine-tuning for image classification', add_help=False)
@@ -41,7 +41,7 @@ def get_args_parser():
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
-    parser.add_argument('--model', default='vit_small_patch16', type=str, metavar='MODEL',
+    parser.add_argument('--model', default='densenet121', type=str, metavar='MODEL',
                         help='Name of model to train')
 
     parser.add_argument('--input_size', default=224, type=int,
@@ -62,8 +62,8 @@ def get_args_parser():
                         help='base learning rate: absolute_lr = base_lr * total_batch_size / 256')
     parser.add_argument('--layer_decay', type=float, default=0.55,
                         help='layer-wise lr decay from ELECTRA/BEiT')
-    # 1e-5, 1e-6, 1e-7 시도하기
-    parser.add_argument('--min_lr', type=float, default=1e-6, metavar='LR',
+    # 1e-5, 1e-6, 1e-7 시도
+    parser.add_argument('--min_lr', type=float, default=1e-5, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0')
 
     parser.add_argument('--warmup_epochs', type=int, default=0, metavar='N',
@@ -102,7 +102,7 @@ def get_args_parser():
                         help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
 
     # * Finetuning params
-    parser.add_argument('--finetune', default='models/vit-s_CXR_0.3M_mae.pth',
+    parser.add_argument('--finetune', default='models/densenet121_CXR_0.3M_mae.pth',
                         help='finetune from checkpoint')
     parser.add_argument('--global_pool', action='store_true')
     parser.set_defaults(global_pool=True)
@@ -115,9 +115,9 @@ def get_args_parser():
     parser.add_argument('--nb_classes', default=2, type=int,
                         help='number of the classification types')
 
-    parser.add_argument('--output_dir', default='results/shoulder_mae/vit/',
+    parser.add_argument('--output_dir', default='results/densenet121/',
                         help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default='results/shoulder_mae/vit/',
+    parser.add_argument('--log_dir', default='results/densenet121',
                         help='path where to tensorboard log')
     parser.add_argument('--device', action='store_false', 
                         default=torch.cuda.is_available(),
@@ -132,7 +132,7 @@ def get_args_parser():
                         help='Perform evaluation only')
     parser.add_argument('--dist_eval', action='store_false', default=False,
                         help='Enabling distributed evaluation (recommended during training for faster monitor')
-    parser.add_argument('--num_workers', default=4, type=int)
+    parser.add_argument('--num_workers', default=2, type=int)
     parser.add_argument('--pin_mem', action='store_true',
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
@@ -156,7 +156,7 @@ def get_args_parser():
     parser.add_argument("--aug_strategy", default='simclr_with_randrotation', type=str, help="strategy for data augmentation")
     parser.add_argument("--dataset", default='shoulderxray', type=str)
 
-    parser.add_argument('--repeated_aug', action='store_true', default=False)
+    parser.add_argument('--repeated_aug', action='store_true', default=True)
 
     parser.add_argument("--optimizer", default='adamw', type=str)
 
@@ -175,11 +175,6 @@ def get_args_parser():
     return parser
 
 def main(args):
-    # misc.init_distributed_mode(args)
-
-    print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
-    print("{}".format(args).replace(', ', ',\n'))
-
     if args.device:
         device = torch.device('cuda')
         cudnn.benchmark = True
@@ -226,12 +221,6 @@ def main(args):
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
         sampler_test = torch.utils.data.SequentialSampler(dataset_test)
 
-    if args.log_dir is not None and not args.eval:
-        os.makedirs(args.log_dir, exist_ok=True)
-        log_writer = SummaryWriter(log_dir=args.log_dir)
-    else:
-        log_writer = None
-
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
@@ -265,47 +254,36 @@ def main(args):
             prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
             label_smoothing=args.smoothing, num_classes=args.nb_classes)
     
-    if 'vit' in args.model:
-        model = models_vit.__dict__[args.model](
-            img_size=args.input_size,
-            num_classes=args.nb_classes,
-            drop_rate=args.vit_dropout_rate,
-            drop_path_rate=args.drop_path,
-            global_pool=args.global_pool,
-        )
+    if 'densenet' in args.model :
+        model = models.__dict__[args.model](num_classes=args.nb_classes)
+    else:
+        raise NotImplementedError
+    
+    # binary classification을 위한 model classifier(FC layer) 변경
+    num_ftrs = model.classifier.in_features
+    model.classifier = torch.nn.Linear(num_ftrs, 1, bias=True)
     
     if args.finetune and not args.eval:
         checkpoint = torch.load(args.finetune, map_location='cpu')
-
         print("Load pre-trained checkpoint from: %s" % args.finetune)
-        checkpoint_model = checkpoint['model']
-        state_dict = model.state_dict()
-        for k in checkpoint_model.keys():
-            if k in state_dict:
-                if checkpoint_model[k].shape == state_dict[k].shape:
-                    state_dict[k] = checkpoint_model[k]
-                    print(f"Loaded Index: {k} from Saved Weights")
-                else:
-                    print(f"Shape of {k} doesn't match with {state_dict[k]}")
-            else:
-                print(f"{k} not found in Init Model")
+        if 'state_dict' in checkpoint.keys():
+            checkpoint_model = checkpoint['state_dict']
+        elif 'model' in checkpoint.keys():
+            checkpoint_model = checkpoint['model']
+        else:
+            checkpoint_model = checkpoint
+        if args.checkpoint_type == 'smp_encoder':
+            state_dict = checkpoint_model
 
-        # interpolate position embedding
-        # model의 input size/구조가 달라졌을 때 필요
-        interpolate_pos_embed(model, checkpoint_model)
+            new_state_dict = OrderedDict()
 
-        # load pre-trained model
-        # strict=False : 완벽한 일치 아니어도 됨
+            for key, value in state_dict.items():
+                if 'model.encoder.' in key:
+                    new_key = key.replace('model.encoder.', '')
+                    new_state_dict[new_key] = value
+            checkpoint_model = new_state_dict
         msg = model.load_state_dict(checkpoint_model, strict=False)
         print(msg)
-
-        # if args.global_pool:
-        #     assert set(msg.missing_keys) == {'head.weight', 'head.bias', 'fc_norm.weight', 'fc_norm.bias'}
-        # else:
-        #     assert set(msg.missing_keys) == {'head.weight', 'head.bias'}
-
-        # manually initialize fc layer
-        trunc_normal_(model.head.weight, std=2e-5)
 
     model.to(device)
 
@@ -331,18 +309,12 @@ def main(args):
         model_without_ddp = model.module
 
     # build optimizer with layer-wise lr decay (lrd)
-    param_groups = lrd.param_groups_lrd(model_without_ddp, args.weight_decay,
-            no_weight_decay_list=model_without_ddp.no_weight_decay(),
-            layer_decay=args.layer_decay
-        )
+    param_groups = optim_factory.param_groups_weight_decay(model_without_ddp, args.weight_decay)
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
     loss_scaler = NativeScaler()
 
     if args.dataset == 'shoulderxray':
-        if mixup_fn is not None:
-            criterion = SoftTargetBinaryCrossEntropy()
-        else:
-            criterion = torch.nn.BCEWithLogitsLoss()
+        criterion = torch.nn.BCEWithLogitsLoss()
     else:
         raise NotImplementedError
     # elif args.smoothing > 0.:
@@ -361,7 +333,7 @@ def main(args):
         print(f"Accuracy of the network on the test set images: {test_stats['acc1']:.4f}")
         exit(0)
 
-    print(f"Start training for {args.epochs} epochs")
+    """print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
     max_accuracy = 0.0
     max_auc = 0.0
@@ -376,28 +348,54 @@ def main(args):
         )
 
         if args.output_dir and (epoch % args.eval_interval == 0 or epoch + 1 == args.epochs):
+            misc.save_model(
+                args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+                loss_scaler=loss_scaler, epoch=epoch)
+
             val_stats = evaluate_shoulderxray(data_loader_val, model, device, args)
             print(f"Average AUC on the val set images: {val_stats['auc_avg']:.4f}")
             print(f"Accuracy of the network on val images: {val_stats['acc1']:.1f}%")
-            if val_stats['auc_avg'] > max_auc:
-                max_auc = max(max_auc,val_stats['auc_avg'])
-                max_accuracy = max(max_accuracy,val_stats['acc1'])
-                misc.save_model(args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
-                                loss_scaler=loss_scaler, epoch=epoch)
+            max_auc = max(max_auc,val_stats['auc_avg'])
+            max_accuracy = max(max_accuracy,val_stats['acc1'])
+            save_model_state(model)"""
+    
             
     model.load_state_dict(torch.load(f'results/{args.model}/bestval_model.pth'))
     test_stats = evaluate_shoulderxray(data_loader_test, model, device, args)
     print(f"Average AUC on the test set images: {test_stats['auc_avg']:.4f}")
     print(f"Accuracy of the network on test images: {test_stats['acc1']:.1f}%")
     
-    total_time = time.time() - start_time
-    total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    print('Training time {}'.format(total_time_str))
+    target_layer = model.features.norm5  # 모델 구조에 따라 조정
+    gradcam_output_dir = 'gradcam_results'
+    apply_gradcam(model, data_loader_test, target_layer, gradcam_output_dir)
 
-# def save_model_state(model):
-#     path = f"{args.output_dir}/bestval_model.pth"
-#     torch.save(model.state_dict(), path)
-#     print("Checkpoint saved to {}".format(path))
+def apply_gradcam(model, data_loader, target_layer, output_dir):
+    gradcam = GradCAM(model, target_layer)
+    os.makedirs(output_dir, exist_ok=True)
+
+    for images, file_names in data_loader:
+        for image, file_name in zip(images, file_names):
+            mask, _ = gradcam(image.unsqueeze(0))
+            heatmap, result = visualize_cam(mask, image)
+
+            # 텐서를 PIL 이미지로 변환
+            heatmap = transforms.ToPILImage()(heatmap)
+            result = transforms.ToPILImage()(result)
+
+            # 원본 파일 이름으로 이미지 저장
+            heatmap.save(os.path.join(output_dir, f'heatmap_{file_name}'))
+            result.save(os.path.join(output_dir, f'result_{file_name}'))
+            print(f"GradCAM 적용 및 {file_name}로 저장 완료")
+            # GradCAM 적용
+
+
+def save_model_state(model):
+    directory = f"results/{args.model}"
+    if not os.path.exists(directory):
+        os.makedirs(directory)  # 디렉토리가 없다면 생성
+    path = f"{directory}/bestval_model.pth"
+    torch.save(model.state_dict(), path)
+    print("Checkpoint saved to {}".format(path))
 
 if __name__ == '__main__':
     os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'

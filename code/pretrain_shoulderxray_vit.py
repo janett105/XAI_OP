@@ -27,35 +27,38 @@ import timm
 assert timm.__version__ == "0.3.2"  # version check
 import timm.optim.optim_factory as optim_factory
 
-import util.misc as misc
+from util import misc as misc
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
 from models import models_mae_vit as models_mae_vit
 #from models.models_mae_cnn import MaskedAutoencoderCNN
 
 from engine_pretrain import train_one_epoch
-from util.dataloader_med import CheXpert, ChestX_ray14, MIMIC, Shoulder_xray
-import cv2
+# from ..util.dataloader_med import CheXpert, ChestX_ray14, MIMIC, Shoulder_xray
+# import cv2
 from util.custom_transforms import custom_train_transform
 from util.sampler import RASampler
+
+from util.pos_embed import interpolate_pos_embed
+from timm.models.layers import trunc_normal_
 
 
 def get_args_parser():
     parser = argparse.ArgumentParser('MAE pre-training', add_help=False)
-    parser.add_argument('--batch_size', default=64, type=int,
+    parser.add_argument('--batch_size', default=8, type=int,
                         help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
-    parser.add_argument('--epochs', default=400, type=int)
-    parser.add_argument('--accum_iter', default=1, type=int,
+    parser.add_argument('--epochs', default=800, type=int)
+    parser.add_argument('--accum_iter', default=4, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
-    parser.add_argument('--model', default='mae_vit_small_patch16_dec128d2b', type=str, metavar='MODEL',
+    parser.add_argument('--model', default='mae_vit_small_patch16_dec512d8b', type=str, metavar='MODEL',
                         help='Name of model to train')
 
     parser.add_argument('--input_size', default=224, type=int,
                         help='images input size')
 
-    parser.add_argument('--mask_ratio', default=0.75, type=float,
+    parser.add_argument('--mask_ratio', default=0.90, type=float,
                         help='Masking ratio (percentage of removed patches).')
 
     parser.add_argument('--norm_pix_loss', action='store_true',
@@ -68,7 +71,7 @@ def get_args_parser():
 
     parser.add_argument('--lr', type=float, default=None, metavar='LR',
                         help='learning rate (absolute lr)')
-    parser.add_argument('--blr', type=float, default=1e-3, metavar='LR',
+    parser.add_argument('--blr', type=float, default=1.5e-4, metavar='LR',
                         help='base learning rate: absolute_lr = base_lr * total_batch_size / 256')
     parser.add_argument('--min_lr', type=float, default=0., metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0')
@@ -77,14 +80,15 @@ def get_args_parser():
                         help='epochs to warmup LR')
 
     # Dataset parameters
-    parser.add_argument('--data_path', default='/data/DB_X-ray/train_to', type=str,
+    parser.add_argument('--data_path', default='data/DB_X-ray/train_to', type=str,
                         help='dataset path')
 
-    parser.add_argument('--output_dir', default='./output_dir',
+    parser.add_argument('--output_dir', default='results/shoulder_mae/vitsmall/randomcrop',
                         help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default='./output_dir',
+    parser.add_argument('--log_dir', default='results/shoulder_mae/vitsmall/randomcrop',
                         help='path where to tensorboard log')
-    parser.add_argument('--device', default='cuda',
+    parser.add_argument('--device', action='store_false', 
+                        default=torch.cuda.is_available(),
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='',
@@ -92,7 +96,7 @@ def get_args_parser():
 
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
-    parser.add_argument('--num_workers', default=10, type=int)
+    parser.add_argument('--num_workers', default=2, type=int)
     parser.add_argument('--pin_mem', action='store_true',
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
@@ -106,7 +110,7 @@ def get_args_parser():
     parser.add_argument('--dist_url', default='env://',
                         help='url used to set up distributed training')
     parser.add_argument("--train_list", default=None, type=str, help="file for training list")
-    parser.add_argument('--random_resize_range', type=float, nargs='+', default=['0.5', '1.0'],
+    parser.add_argument('--random_resize_range', type=float, nargs='+', default=[0.5, 1.0],
                         help='RandomResizedCrop min/max ratio, default: None)')
     parser.add_argument('--fixed_lr', action='store_true', default=False)
     parser.add_argument('--repeated-aug', action='store_true', default=False)
@@ -119,6 +123,19 @@ def get_args_parser():
                         help='finetune from checkpoint')
     return parser
 
+class CustomCrop:
+    def __init__(self, args, resize_ratio_min, resize_ratio_max):
+        self.crop_ratio = args.crop_ratio  # 이미지에서 잘라낼 비율
+        self.random_resized_crop = transforms.RandomResizedCrop(args.input_size, scale=(resize_ratio_min, resize_ratio_max),interpolation=3)  # 3 is bicubic
+
+    def __call__(self, img):
+        w, h = img.size
+        # 전체 이미지 중 원하는 비율만큼만 사용하여 crop할 부분을 정의
+        new_w, new_h = int(self.crop_ratio * w), int(self.crop_ratio * h)
+        # 이미지를 crop_ratio에 따라 잘라냅니다 (이 예에서는 중앙에서 잘라내기)
+        cropped_img = img.crop(((w - new_w) // 2, (h - new_h) // 2, (w + new_w) // 2, (h + new_h) // 2))
+        # RandomResizedCrop을 적용
+        return self.random_resized_crop(cropped_img)
 
 def main(args):
     misc.init_distributed_mode(args)
@@ -126,7 +143,11 @@ def main(args):
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
     print("{}".format(args).replace(', ', ',\n'))
 
-    device = torch.device(args.device)
+    if args.device:
+        device = torch.device('cuda')
+        cudnn.benchmark = True
+    else: device = torch.device('cpu')
+    print(f"device : {device}")
 
     # fix the seed for reproducibility
     seed = args.seed + misc.get_rank()
@@ -150,26 +171,36 @@ def main(args):
     concat_datasets = []
     mean_dict = {'chexpert': [0.485, 0.456, 0.406],
                  'chestxray_nih': [0.5056, 0.5056, 0.5056],
-                 'mimic_cxr': [0.485, 0.456, 0.406]
+                 'mimic_cxr': [0.485, 0.456, 0.406],
+                 'shoulder_xray': [0.5056, 0.5056, 0.5056]
                  }
     std_dict = {'chexpert': [0.229, 0.224, 0.225],
                 'chestxray_nih': [0.252, 0.252, 0.252],
-                'mimic_cxr': [0.229, 0.224, 0.225]
+                'mimic_cxr': [0.229, 0.224, 0.225],
+                'shoulder_xray': [0.252, 0.252, 0.252]
                 }
     print(args.datasets_names)
+
     for dataset_name in args.datasets_names:
         dataset_mean = mean_dict[dataset_name]
         dataset_std = std_dict[dataset_name]
         
-        # random resized crop
-        if args.random_resize_range:
+        if args.random_resize_range: # random resized crop + heatmap
             if args.mask_strategy in ['heatmap_weighted', 'heatmap_inverse_weighted']:
                 resize_ratio_min, resize_ratio_max = args.random_resize_range
                 print(resize_ratio_min, resize_ratio_max)
                 transform_train = custom_train_transform(size=args.input_size,
                                                          scale=(resize_ratio_min, resize_ratio_max),
                                                          mean=dataset_mean, std=dataset_std)
-            else:
+            elif args.mask_strategy == 'centercrop': # masking은 전체 이미지에서 진행 후, bounding box 근처로 crop
+                resize_ratio_min, resize_ratio_max = args.random_resize_range
+                print(resize_ratio_min, resize_ratio_max)
+                transform_train = transforms.Compose([
+                    CustomCrop(args, resize_ratio_min, resize_ratio_max),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.ToTensor(),
+                    transforms.Normalize(dataset_mean, dataset_std)])
+            else: # random resized crop
                 resize_ratio_min, resize_ratio_max = args.random_resize_range
                 print(resize_ratio_min, resize_ratio_max)
                 transform_train = transforms.Compose([
@@ -206,7 +237,7 @@ def main(args):
         
         # concat_datasets.append(dataset)
     #dataset_train = torch.utils.data.ConcatDataset(concat_datasets)
-    dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
+    dataset_train = datasets.ImageFolder(args.data_path, transform=transform_train)
     print(dataset_train)
 
     if args.distributed:
@@ -250,11 +281,43 @@ def main(args):
     # else:
     #     raise NotImplementedError
 
-    model = models_mae_vit.__dict__[args.model](norm_pix_loss=args.norm_pix_loss, img_size=args.input_size,
-                                            heatmap=None, mask_strategy=args.mask_strategy,
-                                            weight_range=args.weight_range,
-                                            heatmap_binary_threshold=args.heatmap_binary_threshold)
+    model = models_mae_vit.__dict__[args.model](norm_pix_loss=args.norm_pix_loss, img_size=args.input_size, 
+                                                mask_strategy=args.mask_strategy)
+    if args.finetune:
+        checkpoint = torch.load(args.finetune, map_location='cpu')
 
+        print("Load pre-trained checkpoint from: %s" % args.finetune)
+        checkpoint_model = checkpoint['model']
+        state_dict = model.state_dict()
+        for k in checkpoint_model.keys():
+            if k in state_dict:
+                if checkpoint_model[k].shape == state_dict[k].shape:
+                    state_dict[k] = checkpoint_model[k]
+                    print(f"Loaded Index: {k} from Saved Weights")
+                else:
+                    print(f'{k} 문제 \n 참조 모델 : {checkpoint_model[k].shape} \n 현재 모델 :{state_dict[k].shape}')
+                    #print(f"Shape of {k} doesn't match with {state_dict[k]}")
+            else:
+                print(f"{k} not found in Init Model")
+
+        # interpolate position embedding
+        # model의 input size/구조가 달라졌을 때 필요
+        interpolate_pos_embed(model, checkpoint_model)
+
+        # load pre-trained model, decoder는 load X
+        # strict=False : 완벽한 일치 아니어도 됨
+        msg = model.load_state_dict(checkpoint_model, strict=False)
+        print(msg)
+
+        # if args.global_pool:
+        #     assert set(msg.missing_keys) == {'head.weight', 'head.bias', 'fc_norm.weight', 'fc_norm.bias'}
+        # else:
+        #     assert set(msg.missing_keys) == {'head.weight', 'head.bias'}
+
+        # manually initialize fc layer
+        # encoder의 마지막 layer는 바꿀 필요 X
+        #trunc_normal_(model.head.weight, std=2e-5)
+    
     model.to(device)
 
     model_without_ddp = model
@@ -276,7 +339,11 @@ def main(args):
         model_without_ddp = model.module
 
     # following timm: set wd as 0 for bias and norm layers
-    param_groups = optim_factory.add_weight_decay(model_without_ddp, args.weight_decay)
+    try: 
+        param_groups = optim_factory.add_weight_decay(model_without_ddp, args.weight_decay)
+    except: # timm 버전 호환
+        param_groups = optim_factory.param_groups_weight_decay(model_without_ddp, args.weight_decay)\
+        
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr, betas=(0.9, 0.95))
     print(optimizer)
     loss_scaler = NativeScaler()
