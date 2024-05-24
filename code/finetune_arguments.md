@@ -39,7 +39,9 @@ python ./code/finetune_shoulderxray_vit.py ^
 --min_lr 1e-5 ^
 --batch_size 8 ^
 --accum_iter 4 ^
---warmup_epochs 5 ^
+--warmup_epochs 5 ^ 
 --epochs 80 ^
 --num_workers 4 ^
+--aa 'rand-m6-mstd0.5-inc1' ^
+--build_timm_transform ^
 --finetune "best_models/vis-s_SHDR_1.4K_mae_800epc.pth"
