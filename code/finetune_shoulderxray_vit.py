@@ -231,12 +231,6 @@ def main(args):
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
         sampler_test = torch.utils.data.SequentialSampler(dataset_test)
 
-    if args.log_dir is not None and not args.eval:
-        os.makedirs(args.log_dir, exist_ok=True)
-        log_writer = SummaryWriter(log_dir=args.log_dir)
-    else:
-        log_writer = None
-
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
