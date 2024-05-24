@@ -15,6 +15,7 @@ import torch.nn.functional as F
 from libauc import losses
 from sklearn.metrics import confusion_matrix
 import copy
+
 def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, loss_scaler, max_norm: float = 0,
@@ -49,8 +50,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                 last_activation = torch.nn.Sigmoid()
         with torch.cuda.amp.autocast():
             outputs = model(samples)
-            # print('outputs', outputs.shape, 'targets', targets.shape)
-            # print(outputs.shape, targets.shape, torch.unique(targets))'
+            # print('outputs', outputs.shape, 'targets', targets.shape) 
+            # print(outputs.shape, targets.shape, torch.unique(targets))' 
             if last_activation is not None:
                 outputs = last_activation(outputs)
             targets=targets.float().unsqueeze(1)

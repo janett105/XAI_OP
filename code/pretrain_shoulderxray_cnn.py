@@ -30,7 +30,7 @@ import timm.optim.optim_factory as optim_factory
 import util.misc as misc
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
-from models_mae_cnn import MaskedAutoencoderCNN
+from models.models_mae_cnn import MaskedAutoencoderCNN
 
 from engine_pretrain import train_one_epoch
 # from util.dataloader_med import ShoulderXray
@@ -211,9 +211,9 @@ def main(args):
             heatmap_path = None
 
     #     if dataset_name == 'chexpert':
-    #         dataset = CheXpert(csv_path="data/CheXpert-v1.0-small/train.csv", image_root_path='data/CheXpert-v1.0-small/', use_upsampling=False,
-    #                            use_frontal=True, mode='train', class_index=-1, transform=transform_train,
-    #                            heatmap_path=heatmap_path, pretraining=True)
+            # dataset = CheXpert(csv_path="data/CheXpert-v1.0-small/train.csv", image_root_path='data/CheXpert-v1.0-small/', use_upsampling=False,
+            #                    use_frontal=True, mode='train', class_index=-1, transform=transform_train,
+            #                    heatmap_path=heatmap_path, pretraining=True)
     #     elif dataset_name == 'chestxray_nih':
             # dataset = ChestX_ray14('data/nih_chestxray', "data_splits/chestxray/train_official.txt", augment=transform_train, num_class=14,
             #                        heatmap_path=heatmap_path, pretraining=True)
