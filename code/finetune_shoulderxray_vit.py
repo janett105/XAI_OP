@@ -176,6 +176,11 @@ def get_args_parser():
 
 def main(args):
     # misc.init_distributed_mode(args)
+    if args.log_dir is not None:
+        os.makedirs(args.log_dir, exist_ok=True)
+        log_writer = SummaryWriter(log_dir=args.log_dir) # tenrsorboard : 시각화
+        writer = open(file=args.log_dir, mode='w') # log, print(출력물, file=writer)
+    else:log_writer = None
 
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
     print("{}".format(args).replace(', ', ',\n'))
