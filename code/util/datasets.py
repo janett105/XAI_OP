@@ -18,7 +18,9 @@ import torch
 from .augment import new_data_aug_generator
 from util.imagerotation import ImageRotation
 
-def build_dataset_shoulder_xray(split, args, logger):
+def build_dataset_shoulder_xray(split, args, logger=None):
+    is_train=False
+    
     if split == 'train':
         mode = 'train'
         is_train=True
