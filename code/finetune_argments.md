@@ -42,15 +42,16 @@ python ./code/finetune_shoulderxray_vit.py ^
 --warmup_epochs 5 ^
 --epochs 80 ^
 --num_workers 4 ^
---finetune "best_models/vis-s_SHDR_1.4K_mae_100epc.pth"
+--finetune "best_models/vis-s_SHDR_1.4K_mae_800epc.pth"
 ```
 
-set SAVE_DIR=results/shoulder_mae/vitsmall/randomcrop
+set SAVE_DIR=results/shoulder_mae/vitsmall/randomcrop/models
+setlOG_DIR=results/shoulder_mae/vitsmall/randomcrop
 set DATASET_DIR=data/DB_X-ray/
 
 python ./code/finetune_shoulderxray_vit.py ^
 --output_dir %SAVE_DIR% ^
---log_dir %SAVE_DIR% ^
+--log_dir %LOG_DIR% ^
 --data_path %DATASET_DIR% ^
 --blr 2.5e-4 --layer_decay 0.55 --weight_decay 0.05 ^
 --model vit_small_patch16 ^
