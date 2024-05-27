@@ -45,4 +45,3 @@ python ./code/finetune_shoulderxray_vit.py ^
 --aa 'rand-m6-mstd0.5-inc1' ^
 --build_timm_transform ^
 --finetune "best_models/vis-s_SHDR_1.4K_mae_800epc.pth"
-
