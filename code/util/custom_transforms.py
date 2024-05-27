@@ -63,14 +63,17 @@ class custom_train_transform(transforms.RandomResizedCrop):
         self.inplace = inplace
 
     def forward(self, img, heatmap):
-        i, j, h, w = self.get_params(img, self.scale, self.ratio)
-        img = TF.resized_crop(img, i, j, h, w, self.size, self.interpolation)
-        heatmap = TF.resized_crop(heatmap, i, j, h, w, self.size, 0)
-        rand_num = random.random()
-
-        if rand_num > 0.5:
-            img = TF.hflip(img)
-            heatmap = TF.hflip(heatmap)
+        """
+        image, heatmap resize   
+        """
+        img = TF.resize(img, self.size, self.interpolation)
+        heatmap = TF.resize(heatmap, self.size, 0)
+        
+        # randomflip
+        # rand_num = random.random()
+        # if rand_num > 0.5: 
+        #     img = TF.hflip(img)
+        #     heatmap = TF.hflip(heatmap)
 
         img = TF.to_tensor(img)
         heatmap = TF.to_tensor(heatmap)

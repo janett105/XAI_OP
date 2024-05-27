@@ -20,7 +20,7 @@ python ./code/pretrain_shoulderxray_cnn.py ^
 ```
 # Pre-training(shoulder)/MAE - ViT-S
 ```
-set SAVE_DIR=results/shoulder_mae/vitsmall/randomcrop
+set SAVE_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap
 
 python ./code/pretrain_shoulderxray_vit.py ^
  --output_dir %SAVE_DIR% ^
@@ -35,7 +35,6 @@ python ./code/pretrain_shoulderxray_vit.py ^
  --datasets_names shoulder_xray ^
  --batch_size 8 ^
  --accum_iter 4 ^
- --mask_strategy 'random' ^
- --crop_ratio 0.8
+ --mae_strategy 'heatmap_mask_boundingbox'
 ```
 tensorboard --logdir=%SAVE_DIR%

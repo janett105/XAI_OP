@@ -16,6 +16,7 @@ import torch
 
 import util.misc as misc
 import util.lr_sched as lr_sched
+import numpy as np
 
 
 def train_one_epoch(model: torch.nn.Module,
@@ -50,7 +51,9 @@ def train_one_epoch(model: torch.nn.Module,
 
         with torch.cuda.amp.autocast():
             if heatmaps is not None:
-                loss, _, _ = model(imgs, mask_ratio=args.mask_ratio, heatmaps=heatmaps)
+                loss, _, mask = model(imgs, mask_ratio=args.mask_ratio, heatmaps=heatmaps)
+                mask_np = mask[0, :].cpu().numpy()
+                np.save(args.output_dir+'mask.npy', mask_np)
             else:
                 loss, _, _ = model(imgs, mask_ratio=args.mask_ratio)
 

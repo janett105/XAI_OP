@@ -29,7 +29,7 @@ class MaskedAutoencoderViT(nn.Module):
     def __init__(self, img_size=224, patch_size=16, in_chans=3,
                  embed_dim=1024, depth=24, num_heads=16,
                  decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16,
-                 mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False, mask_strategy='random'):
+                 mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False, mask_strategy='random', heatmap=None):
         super().__init__()
 
         # --------------------------------------------------------------------------
@@ -71,7 +71,7 @@ class MaskedAutoencoderViT(nn.Module):
         #     self.heatmap_weights = self.extract_patch_weights(heatmap, img_size, patch_size,
         #                                                       weight_min=weight_range[0], weight_max=weight_range[1],
         #                                                       heatmap_binary_threshold=heatmap_binary_threshold)
-        #
+        
 
         self.img_size = img_size
         self.patch_size = patch_size
@@ -81,16 +81,16 @@ class MaskedAutoencoderViT(nn.Module):
     # def extract_patch_weights(self, heatmap, img_size, patch_size, weight_min=0.1, weight_max=1.0,
     #                           heatmap_binary_threshold=None):
     #     heatmap = cv2.resize(heatmap, (img_size, img_size), interpolation=cv2.INTER_AREA)
-    #     heatmap = heatmap[:, :, 0]  # only need one channel for mask
+    #     # heatmap = heatmap[:, :, 0]  # only need one channel for mask
     #     heatmap = heatmap.astype(np.float32)
-    #
+    
     #     if heatmap_binary_threshold is not None:
     #         if heatmap_binary_threshold == 'mean':
     #             threshold = np.mean(heatmap)
     #         else:
     #             raise NotImplementedError
     #         heatmap = (heatmap > threshold).astype(np.float32)
-    #
+    
     #     heatmap = torch.tensor(heatmap)
     #     h = w = heatmap.shape[0] // patch_size
     #     heatmap = heatmap.reshape(h, patch_size, w, patch_size)
@@ -119,7 +119,6 @@ class MaskedAutoencoderViT(nn.Module):
                 masks.append(mask.flatten())
         masks = torch.stack(masks, dim=0).unsqueeze(dim=0)
         return masks
-
 
     def initialize_weights(self):
         # initialization
@@ -181,7 +180,7 @@ class MaskedAutoencoderViT(nn.Module):
         imgs = x.reshape(shape=(x.shape[0], 3, h * p, h * p))
         return imgs
 
-    def random_masking(self, x, mask_ratio):
+    def random_masking(self, x, mask_ratio, heatmaps=None):
         """
         Perform per-sample random masking by per-sample shuffling.
         Per-sample shuffling is done by argsort random noise.
@@ -189,12 +188,13 @@ class MaskedAutoencoderViT(nn.Module):
         """
         N, L, D = x.shape  # batch, length, dim
         len_keep = int(L * (1 - mask_ratio))
-
-        noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
-
+        if heatmaps is not None:
+            noise = torch.mul(torch.rand(N, L, device=x.device), heatmaps)
+        else:
+            noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
 
         # sort noise for each sample
-        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+        ids_shuffle = torch.argsort(noise, dim=1, descending=True)  
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
         # keep the first subset
@@ -209,15 +209,17 @@ class MaskedAutoencoderViT(nn.Module):
 
         return x_masked, mask, ids_restore
 
-    def forward_encoder(self, x, mask_ratio):
+    def forward_encoder(self, x, mask_ratio, heatmaps=None):
         # embed patches
         x = self.patch_embed(x)
 
         # add pos embed w/o cls token
-
         x = x + self.pos_embed[:, 1:, :]
 
-        x, mask, ids_restore = self.random_masking(x, mask_ratio)
+        if heatmaps is not None:
+            x, mask, ids_restore = self.random_masking(x, mask_ratio, heatmaps)
+        else:
+            x, mask, ids_restore = self.random_masking(x, mask_ratio)
 
         # append cls token
         cls_token = self.cls_token + self.pos_embed[:, :1, :]

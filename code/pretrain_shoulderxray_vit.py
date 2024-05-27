@@ -34,13 +34,14 @@ from models import models_mae_vit as models_mae_vit
 #from models.models_mae_cnn import MaskedAutoencoderCNN
 
 from engine_pretrain import train_one_epoch
-# from ..util.dataloader_med import CheXpert, ChestX_ray14, MIMIC, Shoulder_xray
+from util.dataloader_med import ShoulderXray
 # import cv2
 from util.custom_transforms import custom_train_transform
 from util.sampler import RASampler
 
 from util.pos_embed import interpolate_pos_embed
 from timm.models.layers import trunc_normal_
+import cv2
 
 
 def get_args_parser():
@@ -83,9 +84,9 @@ def get_args_parser():
     parser.add_argument('--data_path', default='data/DB_X-ray/train_to', type=str,
                         help='dataset path')
 
-    parser.add_argument('--output_dir', default='results/shoulder_mae/vitsmall/randomcrop',
+    parser.add_argument('--output_dir', default='results/shoulder_mae/vitsmall/centercrop_heatmap',
                         help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default='results/shoulder_mae/vitsmall/randomcrop',
+    parser.add_argument('--log_dir', default='results/shoulder_mae/vitsmall/centercrop_heatmap',
                         help='path where to tensorboard log')
     parser.add_argument('--device', action='store_false', 
                         default=torch.cuda.is_available(),
@@ -118,24 +119,10 @@ def get_args_parser():
     parser.add_argument('--distributed', default=False, action='store_true')
     
     parser.add_argument('--mask_strategy', default='random', type=str)
-    parser.add_argument("--crop_ratio", default=0.8, type=float)
     parser.add_argument('--finetune', default='best_models/vit-s_CXR_0.3M_mae.pth',
                         help='finetune from checkpoint')
+    parser.add_argument("--mae_strategy", default='heatmap_mask_boundingbox', type=str)
     return parser
-
-class CustomCrop:
-    def __init__(self, args, resize_ratio_min, resize_ratio_max):
-        self.crop_ratio = args.crop_ratio  # 이미지에서 잘라낼 비율
-        self.random_resized_crop = transforms.RandomResizedCrop(args.input_size, scale=(resize_ratio_min, resize_ratio_max),interpolation=3)  # 3 is bicubic
-
-    def __call__(self, img):
-        w, h = img.size
-        # 전체 이미지 중 원하는 비율만큼만 사용하여 crop할 부분을 정의
-        new_w, new_h = int(self.crop_ratio * w), int(self.crop_ratio * h)
-        # 이미지를 crop_ratio에 따라 잘라냅니다 (이 예에서는 중앙에서 잘라내기)
-        cropped_img = img.crop(((w - new_w) // 2, (h - new_h) // 2, (w + new_w) // 2, (h + new_h) // 2))
-        # RandomResizedCrop을 적용
-        return self.random_resized_crop(cropped_img)
 
 def main(args):
     misc.init_distributed_mode(args)
@@ -184,51 +171,36 @@ def main(args):
     for dataset_name in args.datasets_names:
         dataset_mean = mean_dict[dataset_name]
         dataset_std = std_dict[dataset_name]
+        print(args.mae_strategy)
         
-        if args.random_resize_range: # random resized crop + heatmap
-            if args.mask_strategy in ['heatmap_weighted', 'heatmap_inverse_weighted']:
-                resize_ratio_min, resize_ratio_max = args.random_resize_range
-                print(resize_ratio_min, resize_ratio_max)
-                transform_train = custom_train_transform(size=args.input_size,
-                                                         scale=(resize_ratio_min, resize_ratio_max),
-                                                         mean=dataset_mean, std=dataset_std)
-            elif args.mask_strategy == 'centercrop': # masking은 전체 이미지에서 진행 후, bounding box 근처로 crop
-                resize_ratio_min, resize_ratio_max = args.random_resize_range
-                print(resize_ratio_min, resize_ratio_max)
-                transform_train = transforms.Compose([
-                    CustomCrop(args, resize_ratio_min, resize_ratio_max),
-                    transforms.RandomHorizontalFlip(),
-                    transforms.ToTensor(),
-                    transforms.Normalize(dataset_mean, dataset_std)])
-            else: # random resized crop
-                resize_ratio_min, resize_ratio_max = args.random_resize_range
-                print(resize_ratio_min, resize_ratio_max)
-                transform_train = transforms.Compose([
-                    transforms.RandomResizedCrop(args.input_size, scale=(resize_ratio_min, resize_ratio_max),
-                                                 interpolation=3),  # 3 is bicubic
-                    transforms.RandomHorizontalFlip(),
-                    transforms.ToTensor(),
-                    transforms.Normalize(dataset_mean, dataset_std)])
-        else:
-            print('Using Directly-Resize Mode. (no RandomResizedCrop)')
+        if args.mae_strategy=='random_crop_mask' and args.random_resize_range: # randomcrop -> resize -> randommasking
+            resize_ratio_min, resize_ratio_max = args.random_resize_range
             transform_train = transforms.Compose([
-                transforms.Resize((args.input_size, args.input_size)),
+                transforms.RandomResizedCrop(args.input_size, scale=(resize_ratio_min, resize_ratio_max),
+                                                interpolation=3),  # 3 is bicubic
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
                 transforms.Normalize(dataset_mean, dataset_std)])
+        elif args.mae_strategy in ['random_mask_boundingbox', 'heatmap_mask_boundingbox']:
+            # resize-> random masking in bounding box
+            # resize -> heat map masking based on bounding box
+            args.mask_strategy = 'heatmap_weighted'
+            transform_train = custom_train_transform(size=args.input_size,
+                                                    mean=dataset_mean, std=dataset_std)
 
-        if args.mask_strategy in ['heatmap_weighted', 'heatmap_inverse_weighted']:
-            heatmap_path = 'results/mask_heatmap.png'
-        else:
-            heatmap_path = None
+        # if args.mask_strategy in ['heatmap_weighted', 'heatmap_inverse_weighted']:
+        #     heatmap_path = 'data/DB_BBox/mask_heatmap.png' #nih_bbox_heatmap.png
+        #     heatmap = cv2.imread(heatmap_path)
+        # else:
+        #     heatmap_path = None
 
         # if dataset_name == 'chexpert':
         #     dataset = CheXpert(csv_path="data/CheXpert-v1.0-small/train.csv", image_root_path='data/CheXpert-v1.0-small/', use_upsampling=False,
         #                        use_frontal=True, mode='train', class_index=-1, transform=transform_train,
         #                        heatmap_path=heatmap_path, pretraining=True)
         # elif dataset_name == 'chestxray_nih':
-        #     dataset = ChestX_ray14('data/nih_chestxray', "data_splits/chestxray/train_official.txt", augment=transform_train, num_class=14,
-        #                            heatmap_path=heatmap_path, pretraining=True)
+            # dataset = ChestX_ray14('data/nih_chestxray', "data_splits/chestxray/train_official.txt", augment=transform_train, num_class=14,
+            #                        heatmap_path=heatmap_path, pretraining=True)
         # elif dataset_name == 'mimic_cxr':
         #     dataset = MIMIC(path='data/mimic_cxr', version="chexpert", split="train", transform=transform_train, views=["AP", "PA"],
         #                     unique_patients=False, pretraining=True)
@@ -237,7 +209,7 @@ def main(args):
         
         # concat_datasets.append(dataset)
     #dataset_train = torch.utils.data.ConcatDataset(concat_datasets)
-    dataset_train = datasets.ImageFolder(args.data_path, transform=transform_train)
+    dataset_train = ShoulderXray(args.data_path, transform=transform_train, heatmap_path='data/DB_BBox/Bbox.npy')
     print(dataset_train)
 
     if args.distributed:
@@ -272,15 +244,6 @@ def main(args):
     )
 
     # define the model
-
-    # if args.mask_strategy in ['heatmap_weighted', 'heatmap_inverse_weighted']:
-    #     print('Using Heatmap nih_bbox_heatmap.png for attentive masking')
-    #     heatmap = cv2.imread('nih_bbox_heatmap.png')
-    # elif args.mask_strategy == 'random':
-    #     heatmap = None
-    # else:
-    #     raise NotImplementedError
-
     model = models_mae_vit.__dict__[args.model](norm_pix_loss=args.norm_pix_loss, img_size=args.input_size, 
                                                 mask_strategy=args.mask_strategy)
     if args.finetune:
