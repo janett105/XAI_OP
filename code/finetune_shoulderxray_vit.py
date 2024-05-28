@@ -16,7 +16,7 @@ from timm.data.mixup import Mixup
 #from util.mixup_multi_label import Mixup
 
 from util.multi_label_loss import SoftTargetBinaryCrossEntropy
-
+from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 import util.lr_decay as lrd
 import util.misc as misc
 from util.datasets import build_dataset, build_dataset_shoulder_xray
@@ -31,6 +31,7 @@ from libauc import losses
 from torchvision import models
 import timm.optim.optim_factory as optim_factory
 from collections import OrderedDict
+import sys
 
 def get_args_parser():
     parser = argparse.ArgumentParser('MAE fine-tuning for image classification', add_help=False)
@@ -120,7 +121,7 @@ def get_args_parser():
     parser.add_argument('--log_dir', default='results/shoulder_mae/vit/',
                         help='path where to tensorboard log')
     parser.add_argument('--device', action='store_false', 
-                        default=torch.cuda.is_available(),
+                        default=torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu'),
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='',
@@ -174,95 +175,65 @@ def get_args_parser():
 
     return parser
 
-def main(args):
+def finetune_vit(args):
     # misc.init_distributed_mode(args)
     if args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
         log_writer = SummaryWriter(log_dir=args.log_dir) # tenrsorboard : 시각화
-        #writer = open(file=args.log_dir, mode='w') # log, print(출력물, file=writer)
+        writer = open(file=args.log_dir+'training_logs.txt', mode='w') # log, print(출력물, file=writer)
     else:log_writer = None
 
-    print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
-    print("{}".format(args).replace(', ', ',\n'))
-
-    if args.device:
-        device = torch.device('cuda')
+    if args.device == torch.device('cuda'):
         cudnn.benchmark = True
-    else: device = torch.device('cpu')
-    print(f"device : {device}")
 
     # fix the seed for reproducibility
     seed = args.seed + misc.get_rank()
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    cudnn.benchmark = True
+    print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
+    print(f"device : {args.device}")
+    print("{}".format(args).replace(', ', ',\n'), file=writer)
 
-    dataset_train = build_dataset_shoulder_xray(split='train', args=args)
-    dataset_val = build_dataset_shoulder_xray(split='val', args=args)
-    dataset_test = build_dataset_shoulder_xray(split='test', args=args)
+#------------------------------- Dataset 준비---------------------------------------------------
+    dataset_train = build_dataset_shoulder_xray(split='train', args=args, logger=writer)
+    dataset_val = build_dataset_shoulder_xray(split='val', args=args, logger=writer)
+    dataset_test = build_dataset_shoulder_xray(split='test', args=args, logger=writer)
 
-    if args.distributed: 
-        num_tasks = misc.get_world_size()
-        global_rank = misc.get_rank()
-        if args.repeated_aug:
-            sampler_train = RASampler(
-                dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
-            )
-        else:
-            sampler_train = torch.utils.data.DistributedSampler(
-                dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
-            )
-        print("Sampler_train = %s" % str(sampler_train))
-        if args.dist_eval:
-            if len(dataset_test) % num_tasks != 0:
-                print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
-                      'This will slightly alter validation results as extra duplicate entries are added to achieve '
-                      'equal num of samples per-process.')
-            sampler_val = torch.utils.data.DistributedSampler(
-                dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=True)  # shuffle=True to reduce monitor bias
-            sampler_test = torch.utils.data.DistributedSampler(
-                dataset_test, num_replicas=num_tasks, rank=global_rank, shuffle=True)
-        else:
-            sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-            sampler_test = torch.utils.data.SequentialSampler(dataset_test)
-    else:
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
-        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-        sampler_test = torch.utils.data.SequentialSampler(dataset_test)
+    sampler_train = torch.utils.data.RandomSampler(dataset_train)
+    sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+    sampler_test = torch.utils.data.SequentialSampler(dataset_test)
 
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
-        drop_last=True,
-    )
+        drop_last=True,)
 
     data_loader_val = torch.utils.data.DataLoader(
         dataset_val, sampler=sampler_val,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
-        drop_last=False
-    )
+        drop_last=False)
 
     data_loader_test = torch.utils.data.DataLoader(
         dataset_test, sampler=sampler_test,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
-        drop_last=False
-    )
-
-    mixup_fn = None
-    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
-    if mixup_active:
-        print("Mixup is activated!")
-        mixup_fn = Mixup(
-            mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
-            prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
-            label_smoothing=args.smoothing, num_classes=args.nb_classes)
+        drop_last=False)
+    
+#------------------------------- Model 준비---------------------------------------------------
+    # mixup_fn = None
+    # mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
+    # if mixup_active:
+    #     print("Mixup is activated!")
+    #     mixup_fn = Mixup(
+    #         mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
+    #         prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
+    #         label_smoothing=args.smoothing, num_classes=args.nb_classes)
     
     if 'vit' in args.model:
         model = models_vit.__dict__[args.model](
@@ -276,7 +247,7 @@ def main(args):
     if args.finetune and not args.eval:
         checkpoint = torch.load(args.finetune, map_location='cpu')
 
-        print("Load pre-trained checkpoint from: %s" % args.finetune)
+        print("Load pre-trained checkpoint from: %s" % args.finetune, file=writer)
         checkpoint_model = checkpoint['model']
         state_dict = model.state_dict()
         for k in checkpoint_model.keys():
@@ -306,56 +277,47 @@ def main(args):
         # manually initialize fc layer
         trunc_normal_(model.head.weight, std=2e-5)
 
-    model.to(device)
-
+    model.to(args.device)
     model_without_ddp = model
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    print("Model = %s" % str(model_without_ddp))
-    print('number of params (M): %.2f' % (n_parameters / 1.e6))
-
+#------------------------------- Learning Parameters 준비---------------------------------------------------
     eff_batch_size = args.batch_size * args.accum_iter * misc.get_world_size()
     
     if args.lr is None:  # only base_lr is specified
         args.lr = args.blr * eff_batch_size / 256
 
-    print("base lr: %.2e" % (args.lr * 256 / eff_batch_size))
-    print("actual lr: %.2e" % args.lr)
-
-    print("accumulate grad iterations: %d" % args.accum_iter)
-    print("effective batch size: %d" % eff_batch_size)
-
-    if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
-        model_without_ddp = model.module
-
     # build optimizer with layer-wise lr decay (lrd)
     param_groups = lrd.param_groups_lrd(model_without_ddp, args.weight_decay,
             no_weight_decay_list=model_without_ddp.no_weight_decay(),
-            layer_decay=args.layer_decay
-        )
+            layer_decay=args.layer_decay)
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
     loss_scaler = NativeScaler()
 
-    if args.dataset == 'shoulderxray':
-        if mixup_fn is not None:
-            criterion = SoftTargetBinaryCrossEntropy()
-        else:
-            criterion = torch.nn.BCEWithLogitsLoss()
-    else:
-        raise NotImplementedError
-    # elif args.smoothing > 0.:
-    #     criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
+    # if mixup_fn is not None:
+    #     criterion = SoftTargetBinaryCrossEntropy()
+    if args.smoothing > 0.:
+        criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
+    else: 
+        criterion = torch.nn.BCEWithLogitsLoss()
 
-    # if
-    # criterion = torch.nn.BCEWithLogitsLoss()
-
-    print("criterion = %s" % str(criterion))
+    # if args.distributed:
+    #     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+    #     model_without_ddp = model.module
 
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
-    
+
+    print("criterion = %s" % str(criterion), file=writer)
+    print("Model = %s" % str(model_without_ddp), file=writer)
+    print('number of params (M): %.2f' % (n_parameters / 1.e6), file=writer)
+    print("base lr: %.2e" % (args.lr * 256 / eff_batch_size), file=writer)
+    print("actual lr: %.2e" % args.lr, file=writer)
+    print("accumulate grad iterations: %d" % args.accum_iter, file=writer)
+    print("effective batch size: %d" % eff_batch_size, file=writer)
+
+#------------------------------- Training & Evaluation---------------------------------------------------
     if args.eval:
-        test_stats = evaluate_shoulderxray(data_loader_test, model, device, args)
+        test_stats = evaluate_shoulderxray(data_loader_test, model, args.device, args)
         print(f"Average AUC of the network on the test set images: {test_stats['auc_avg']:.4f}")
         print(f"Accuracy of the network on the test set images: {test_stats['acc1']:.4f}")
         exit(0)
@@ -369,29 +331,53 @@ def main(args):
             data_loader_train.sampler.set_epoch(epoch)
         train_stats = train_one_epoch(
             model, criterion, data_loader_train,
-            optimizer, device, epoch, loss_scaler,
-            args.clip_grad, mixup_fn,
-            args=args
-        )
+            optimizer, args.device, epoch, loss_scaler,
+            args.clip_grad, log_writer=log_writer, args=args)
 
         if args.output_dir and (epoch % args.eval_interval == 0 or epoch + 1 == args.epochs):
-            val_stats = evaluate_shoulderxray(data_loader_val, model, device, args)
+            val_stats = evaluate_shoulderxray(data_loader_val, model, args.device, args)
             print(f"Average AUC on the val set images: {val_stats['auc_avg']:.4f}")
             print(f"Accuracy of the network on val images: {val_stats['acc1']:.1f}%")
+            
             if val_stats['auc_avg'] > max_auc:
                 max_auc = max(max_auc,val_stats['auc_avg'])
                 max_accuracy = max(max_accuracy,val_stats['acc1'])
                 misc.save_model(args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                                 loss_scaler=loss_scaler, epoch=epoch)
             
+            if log_writer is not None:
+                log_writer.add_scalar('perf/auc_avg', val_stats['auc_avg'], epoch)
+                log_writer.add_scalar('perf/val_loss', val_stats['loss'], epoch)
+            
+            log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
+                            **{f'val_{k}': v for k, v in val_stats.items()},
+                            'epoch': epoch,
+                            'n_parameters': n_parameters}
+
+            if args.output_dir and misc.is_main_process():
+                if log_writer is not None:
+                    log_writer.flush()
+                with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_stats) + "\n")
+
+
     model.load_state_dict(torch.load(f'results/{args.model}/bestval_model.pth'))
-    test_stats = evaluate_shoulderxray(data_loader_test, model, device, args)
+    test_stats = evaluate_shoulderxray(data_loader_test, model, args.device, args)
     print(f"Average AUC on the test set images: {test_stats['auc_avg']:.4f}")
     print(f"Accuracy of the network on test images: {test_stats['acc1']:.1f}%")
-    
+    log_stats = {**{f'test_{k}': v for k, v in test_stats.items()},
+                    'n_parameters': n_parameters}
+
+    if args.output_dir and misc.is_main_process():
+        if log_writer is not None:
+            log_writer.flush()
+        with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+            f.write(json.dumps(log_stats) + "\n")
+
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Training time {}'.format(total_time_str))
+    sys.stdout.close()
 
 # def save_model_state(model):
 #     path = f"{args.output_dir}/bestval_model.pth"
@@ -404,4 +390,4 @@ if __name__ == '__main__':
     args = args.parse_args()
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-    main(args)
+    finetune_vit(args)

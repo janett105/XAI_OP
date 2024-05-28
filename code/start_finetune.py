@@ -2,24 +2,23 @@ from pathlib import Path
 import argparse
 import os
 from study.tutorial.finetune_shoulderxray_den import finetune_cnn
-from finetune.finetune_shoulderxray_vit import finetune_vit
+from finetune_shoulderxray_vit import finetune_vit
 import torch
 import util.misc as misc
 
 def get_args_parser():
     parser = argparse.ArgumentParser('MAE fine-tuning for image classification', add_help=False)
-    parser.add_argument('--epochs', default=100, type=int)
+    parser.add_argument('--epochs', default=80, type=int)
     parser.add_argument('--batch_size', default=8, type=int,
                         help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
     parser.add_argument('--accum_iter', default=4, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
-    parser.add_argument('--model', default=f'densenet121', type=str, metavar='MODEL',
-                        help='Name of model to train')
+    parser.add_argument('--model', type=str, metavar='MODEL',help='Name of model to train')
     parser.add_argument('--input_size', default=224, type=int,
                         help='images input size')
-    parser.add_argument('--drop_path', type=float, default=0, metavar='PCT',
+    parser.add_argument('--drop_path', type=float, metavar='PCT',
                         help='Drop path rate (default: 0.1)')
 
     # Optimizer parameters
@@ -135,8 +134,8 @@ def get_args_parser():
 if __name__ == '__main__':
     args = get_args_parser()
     args = args.parse_args()
-    if args.output_dir:
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    # if args.output_dir:
+    #     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     
     if 'densenet' in args.model:
         finetune_cnn(args)
