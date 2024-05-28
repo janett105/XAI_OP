@@ -44,4 +44,4 @@ python ./code/finetune_shoulderxray_vit.py ^
 --num_workers 4 ^
 --aa rand-m6-mstd0.5-inc1 ^
 --build_timm_transform ^
---finetune "best_models/vis-s_SHDR_1.4K_mae_center_heatmap_800epc.pth"
+--finetune "best_models/vit-s_SHDR_1.4K_mae_random_800epc.pth"
