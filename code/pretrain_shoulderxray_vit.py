@@ -185,8 +185,11 @@ def main(args):
             # resize-> random masking in bounding box
             # resize -> heat map masking based on bounding box
             args.mask_strategy = 'heatmap_weighted'
-            transform_train = custom_train_transform(size=args.input_size,
-                                                    mean=dataset_mean, std=dataset_std)
+
+            if args.mae_strategy =='heatmap_mask_boundingbox': heatmap_path = 'data/DB_BBox/Bbox.npy'
+            elif args.mae_strategy =='random_mask_boundingbox':heatmap_path = 'data/DB_BBox/BboxLine.npy'
+
+            transform_train = custom_train_transform(size=args.input_size, mean=dataset_mean, std=dataset_std)
 
         # if args.mask_strategy in ['heatmap_weighted', 'heatmap_inverse_weighted']:
         #     heatmap_path = 'data/DB_BBox/mask_heatmap.png' #nih_bbox_heatmap.png
@@ -209,7 +212,7 @@ def main(args):
         
         # concat_datasets.append(dataset)
     #dataset_train = torch.utils.data.ConcatDataset(concat_datasets)
-    dataset_train = ShoulderXray(args.data_path, transform=transform_train, heatmap_path='data/DB_BBox/Bbox.npy')
+    dataset_train = ShoulderXray(args.data_path, transform=transform_train, heatmap_path=heatmap_path)
     print(dataset_train)
 
     if args.distributed:

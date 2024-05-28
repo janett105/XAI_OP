@@ -7,6 +7,8 @@ import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
 
 from PIL import ImageFilter
+import torch
+import numpy as np
 
 
 class GaussianBlur(object):
@@ -62,20 +64,23 @@ class custom_train_transform(transforms.RandomResizedCrop):
         self.std = std
         self.inplace = inplace
 
-    def forward(self, img, heatmap):
+        # self.heatmap = np.load(heatmap_path)
+        # # self.heatmap = TF.resize(self.heatmap, self.size, 0)
+        # self.heatmap = torch.from_numpy(self.heatmap)
+
+    def forward(self, img):
         """
         image, heatmap resize   
         """
-        img = TF.resize(img, self.size, self.interpolation)
-        heatmap = TF.resize(heatmap, self.size, 0)
-        
+        # heatmap = self.heatmap
+
         # randomflip
         # rand_num = random.random()
         # if rand_num > 0.5: 
         #     img = TF.hflip(img)
         #     heatmap = TF.hflip(heatmap)
 
+        img = TF.resize(img, self.size, self.interpolation)
         img = TF.to_tensor(img)
-        heatmap = TF.to_tensor(heatmap)
         img = TF.normalize(img, self.mean, self.std, self.inplace)
-        return img, heatmap
+        return img

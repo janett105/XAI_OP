@@ -36,9 +36,7 @@ def train_one_epoch(model: torch.nn.Module,
 
     if log_writer is not None:
         print('log_dir: {}'.format(log_writer.log_dir))
-    for i in data_loader:
-        print(i)
-        break
+
     for data_iter_step, (samples, _) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
 
         # we use a per iteration (instead of per epoch) lr scheduler
@@ -53,9 +51,9 @@ def train_one_epoch(model: torch.nn.Module,
 
         with torch.cuda.amp.autocast():
             if heatmaps is not None:
-                loss, _, mask = model(imgs, mask_ratio=args.mask_ratio, heatmaps=heatmaps)
-                mask_np = mask[0, :].cpu().numpy()
-                np.save(args.output_dir+'mask.npy', mask_np)
+                loss, _, mask = model(imgs, mask_ratio=args.mask_ratio, heatmaps=heatmaps) # mask : [batch수, 이미지 1개당 patch 수]tensor
+                # mask_np = mask[0, :].cpu().numpy() 
+                # np.save(args.output_dir+'mask.npy', mask_np)
             else:
                 loss, _, _ = model(imgs, mask_ratio=args.mask_ratio)
 

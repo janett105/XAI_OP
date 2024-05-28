@@ -101,6 +101,18 @@ class MaskedAutoencoderViT(nn.Module):
     #     print('**************************')
     #     heatmap_weights = (heatmap_weights / heatmap_weights.max() * (weight_max - weight_min) + weight_min)
     #     return heatmap_weights
+    def patchify_heatmap(self, heatmaps, patch_size):
+        """
+        heatmaps batch를 받아서 (torch.Size([8, 224, 224]))
+        [8, 224,224] 확률 분포 heatmap -> patch로 나눠서 [8, 14, 14, 16, 16] 
+        patch 안의 값들은 sum -> [8, 14*14]
+        batch별로 각 값들은 확률분포를 따름
+        """
+        batch_size = heatmaps.shape[0]
+
+        heatmaps = heatmaps.unfold(1, patch_size, patch_size).unfold(2, patch_size, patch_size)
+        heatmaps = heatmaps.contiguous().view(batch_size, -1, patch_size*patch_size).sum(-1)
+        return heatmaps 
 
     def get_local_attention_mask(self, img_size, patch_size):
         h = w = img_size // patch_size
@@ -185,21 +197,32 @@ class MaskedAutoencoderViT(nn.Module):
         Perform per-sample random masking by per-sample shuffling.
         Per-sample shuffling is done by argsort random noise.
         x: [N, L, D], sequence
+        
+        한 이미지에서 전체 패치의 90%를 masking, 즉 masking의 단위가 pixel이 아닌 patch임.
+        heatmap masking : 이미지에 해당하는 각 패치의 masking 확률을 그 안에 있는 pixel값들 반영해서 계산
+                        -> 중요한 패치들 순으로 masking
+        bounding box masking ; ㅎggㅎㅎㅎㅎㅎㅎㅎㅎㅎㅎㅎㅎㅎㅎ
+
+        1. [224,224] 확률 분포 heatmap -> patch로 나누고 그 안의 값들은 sum (patchify_heatmap())
+        2. [16, 16]으로 나눈 patch를 [1, 196]으로 (이미자와 patch의 위치가 mapping되도록) (patchify_heatmap())
+        3. [1, 196]에서의 확률 분포에 맞게 [1,196] noise를 8개 생성 후 [8, 196]으로
         """
-        N, L, D = x.shape  # batch, length, dim
-        len_keep = int(L * (1 - mask_ratio))
+        N, L, D = x.shape  # batch 크기(img 개수), 이미지 1개당 patch 수, patch 하나당 임베딩 벡터 크기 [8 batch_size, 196 patch_num, 384 embedding_vector_dim]
+        len_keep = int(L * (1 - mask_ratio)) # 마스킹 되지 않을 패치 수
         if heatmaps is not None:
-            noise = torch.mul(torch.rand(N, L, device=x.device), heatmaps)
+            # noise = torch.mul(torch.rand(N, L, device=x.device), heatmaps) # 중요한 patch(마스킹 되어야 하는 patch)일 수록 높은 값
+            noise = torch.multinomial(heatmaps, num_samples=L) # batch별로 heatmap 확률분포 따라 sampling
+            ids_shuffle = torch.flip(noise, dims=(1,))
         else:
             noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
+            ids_shuffle = torch.argsort(noise, dim=1, descending=False) # 모든 batch에 대해서, masking 확률 적은 patch 부터 index 정렬
 
         # sort noise for each sample
-        ids_shuffle = torch.argsort(noise, dim=1, descending=True)  
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
         # keep the first subset
-        ids_keep = ids_shuffle[:, :len_keep]
-        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+        ids_keep = ids_shuffle[:, :len_keep] # masking될 확률 적은 patch들 중 10%만 선택 (masking 비율 : 90%)
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D)) # masking 되지 않고 남은 patch들만
 
         # generate the binary mask: 0 is keep, 1 is remove
         mask = torch.ones([N, L], device=x.device)
@@ -211,7 +234,8 @@ class MaskedAutoencoderViT(nn.Module):
 
     def forward_encoder(self, x, mask_ratio, heatmaps=None):
         # embed patches
-        x = self.patch_embed(x)
+        x = self.patch_embed(x) # [8 batch_size, 3 dim, 224, 224] -> [8 batch_size, 196 patch_num, 384]
+        heatmaps = self.patchify_heatmap(heatmaps, self.patch_size) #[8 batch_size, 224, 224] -> [8 batch_size, 196 patch_num]
 
         # add pos embed w/o cls token
         x = x + self.pos_embed[:, 1:, :]

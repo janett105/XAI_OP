@@ -181,10 +181,13 @@ class ShoulderXray(datasets.ImageFolder):
     def __init__(self, root, transform=None, heatmap_path=None, loader: Callable[[str], Any] = default_loader):
         super(ShoulderXray, self).__init__(root, transform=transform)
         
+        self.transform = transform
         self.loader = loader
         if heatmap_path is not None:
             # self.heatmap = Image.open(heatmap_path).convert('RGB')
             self.heatmap = np.load(heatmap_path)
+            self.heatmap = torch.from_numpy(self.heatmap)
+            #self.heatmap = self.heatmap.unsqueeze(0).repeat(3,1,1)
         else:self.heatmap = None
 
     def __getitem__(self, index):
@@ -194,7 +197,7 @@ class ShoulderXray(datasets.ImageFolder):
             img = self.transform(img)
         target = torch.tensor(target, dtype=torch.float)
 
-        if self.heatmap:
+        if self.heatmap != None:
             heatmap = self.heatmap
             # if self.transform:
             #     heatmap = self.transform(heatmap)
