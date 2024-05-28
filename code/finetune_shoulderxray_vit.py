@@ -322,43 +322,43 @@ def finetune_vit(args):
         print(f"Accuracy of the network on the test set images: {test_stats['acc1']:.4f}")
         exit(0)
 
-    # print(f"Start training for {args.epochs} epochs")
+    print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
-    # max_accuracy = 0.0
-    # max_auc = 0.0
-    # for epoch in range(args.start_epoch, args.epochs):
-    #     if args.distributed:
-    #         data_loader_train.sampler.set_epoch(epoch)
-    #     train_stats = train_one_epoch(
-    #         model, criterion, data_loader_train,
-    #         optimizer, args.device, epoch, loss_scaler,
-    #         args.clip_grad, log_writer=log_writer, args=args)
+    max_accuracy = 0.0
+    max_auc = 0.0
+    for epoch in range(args.start_epoch, args.epochs):
+        if args.distributed:
+            data_loader_train.sampler.set_epoch(epoch)
+        train_stats = train_one_epoch(
+            model, criterion, data_loader_train,
+            optimizer, args.device, epoch, loss_scaler,
+            args.clip_grad, log_writer=log_writer, args=args)
 
-    #     if args.output_dir and (epoch % args.eval_interval == 0 or epoch + 1 == args.epochs):
-    #         val_stats = evaluate_shoulderxray(data_loader_val, model, args.device, args)
-    #         print(f"Average AUC on the val set images: {val_stats['auc_avg']:.4f}")
-    #         print(f"Accuracy of the network on val images: {val_stats['acc1']:.1f}%")
+        if args.output_dir and (epoch % args.eval_interval == 0 or epoch + 1 == args.epochs):
+            val_stats = evaluate_shoulderxray(data_loader_val, model, args.device, args)
+            print(f"Average AUC on the val set images: {val_stats['auc_avg']:.4f}")
+            print(f"Accuracy of the network on val images: {val_stats['acc1']:.1f}%")
             
-    #         if val_stats['auc_avg'] > max_auc or val_stats['acc1'] > max_accuracy:
-    #             max_auc = max(max_auc,val_stats['auc_avg'])
-    #             max_accuracy = max(max_accuracy,val_stats['acc1'])
-                # misc.save_model(args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
-                #                 loss_scaler=loss_scaler, epoch=epoch)
+            if val_stats['auc_avg'] > max_auc or val_stats['acc1'] > max_accuracy:
+                max_auc = max(max_auc,val_stats['auc_avg'])
+                max_accuracy = max(max_accuracy,val_stats['acc1'])
+                misc.save_model(args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
+                                loss_scaler=loss_scaler, epoch=epoch)
             
-    #         if log_writer is not None:
-    #             log_writer.add_scalar('perf/auc_avg', val_stats['auc_avg'], epoch)
-    #             log_writer.add_scalar('perf/val_loss', val_stats['loss'], epoch)
+            if log_writer is not None:
+                log_writer.add_scalar('perf/auc_avg', val_stats['auc_avg'], epoch)
+                log_writer.add_scalar('perf/val_loss', val_stats['loss'], epoch)
             
-    #         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-    #                         **{f'val_{k}': v for k, v in val_stats.items()},
-    #                         'epoch': epoch,
-    #                         'n_parameters': n_parameters}
+            log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
+                            **{f'val_{k}': v for k, v in val_stats.items()},
+                            'epoch': epoch,
+                            'n_parameters': n_parameters}
 
-    #         if args.output_dir and misc.is_main_process():
-    #             if log_writer is not None:
-    #                 log_writer.flush()
-    #             with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
-    #                 f.write(json.dumps(log_stats) + "\n")
+            if args.output_dir and misc.is_main_process():
+                if log_writer is not None:
+                    log_writer.flush()
+                with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_stats) + "\n")
 
 
 

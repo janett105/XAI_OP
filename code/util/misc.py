@@ -314,7 +314,7 @@ def save_model(args, epoch, model, model_without_ddp, optimizer, loss_scaler, pr
             save_on_master(to_save, checkpoint_path)
     else:
         client_state = {'epoch': epoch}
-        model.save_checkpoint(save_dir=args.output_dir, tag=f"{filename}_{epoch_name}", client_state=client_state)
+        model.save_checkpoint(save_dir=args.output_dir, tag=filename, client_state=client_state)
 
 
 def load_model(args, model_without_ddp, optimizer, loss_scaler):
