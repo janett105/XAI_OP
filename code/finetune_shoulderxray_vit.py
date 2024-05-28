@@ -361,7 +361,22 @@ def finetune_vit(args):
     #                 f.write(json.dumps(log_stats) + "\n")
 
 
-    model.load_state_dict(torch.load(f'{args.output_dir}/bestval_model'))
+
+    checkpoint = torch.load(os.path.join(args.output_dir,'bestval_model.pth'), map_location='cpu')
+
+    checkpoint_model = checkpoint['model']
+    state_dict = model.state_dict()
+    for k in checkpoint_model.keys():
+        if k in state_dict:
+            if checkpoint_model[k].shape == state_dict[k].shape:
+                state_dict[k] = checkpoint_model[k]
+                print(f"Loaded Index: {k} from Saved Weights")
+            else:
+                print(f"Shape of {k} doesn't match with {state_dict[k]}")
+        else:
+            print(f"{k} not found in Init Model")
+    model.load_state_dict(checkpoint_model, strict=False)
+
     test_stats = evaluate_shoulderxray(data_loader_test, model, args.device, args)
     print(f"Average AUC on the test set images: {test_stats['auc_avg']:.4f}")
     print(f"Accuracy of the network on test images: {test_stats['acc1']:.1f}%")
