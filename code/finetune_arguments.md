@@ -27,7 +27,7 @@ python ./code/finetune_shoulderxray_cnn.py ^
 
 set SAVE_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/models/
 set lOG_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/
-set DATASET_DIR=data/DB_X-ray/
+set DATASET_DIR=data/DB_X-ray_rotated/
 
 python ./code/finetune_shoulderxray_vit.py ^
 --output_dir %SAVE_DIR% ^
