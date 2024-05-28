@@ -1,6 +1,6 @@
 data/
 best_models/
-results/
+models/
 medical_mae/
 
 # Byte-compiled / optimized / DLL files
