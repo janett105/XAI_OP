@@ -51,9 +51,9 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         targets = targets.to(device, non_blocking=True)
         
         # 타겟을 one-hot 벡터로 변환
-        targets_one_hot = torch.nn.functional.one_hot(targets, num_classes=2).to(torch.float32).to(device)
+        #targets_one_hot = torch.nn.functional.one_hot(targets, num_classes=2).to(torch.float32).to(device)
+        #targets_one_hot = torch.nn.functional.one_hot(targets, num_classes=2).to(torch.int64).to(device)
         #print('targets_one_hot: ', targets_one_hot.shape)
-        
         # print('samples', samples.shape, 'targets', targets.shape)
         if mixup_fn is not None:
             samples, targets = mixup_fn(samples, targets)
@@ -66,7 +66,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             # print(outputs.shape, targets.shape, torch.unique(targets))
             if last_activation is not None:
                 outputs = last_activation(outputs)
-            loss = criterion(outputs, targets_one_hot)
+            # loss = criterion(outputs, targets_one_hot)
+            loss = criterion(outputs, targets)
 
         loss_value = loss.item()
 
