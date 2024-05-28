@@ -39,7 +39,7 @@ python ./code/finetune_shoulderxray_vit.py ^
 --min_lr 1e-5 ^
 --batch_size 8 ^
 --accum_iter 4 ^
---warmup_epochs 5 ^ 
+--warmup_epochs 5 ^
 --epochs 80 ^
 --num_workers 4 ^
 --aa 'rand-m6-mstd0.5-inc1' ^

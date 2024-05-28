@@ -35,6 +35,6 @@ python ./code/pretrain_shoulderxray_vit.py ^
  --datasets_names shoulder_xray ^
  --batch_size 8 ^
  --accum_iter 4 ^
- --mae_strategy 'heatmap_mask_boundingbox'
+ --mae_strategy heatmap_mask_boundingbox
 ```
 tensorboard --logdir=%SAVE_DIR%
