@@ -24,7 +24,9 @@ from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 from models import models_vit
 
-from engine_finetune_vit import train_one_epoch,evaluate_shoulderxray
+import engine_finetune_vit
+import engine_finetune_cnn 
+
 from util.sampler import RASampler
 #from apex.optimizers import FusedAdam
 from libauc import losses
@@ -32,23 +34,24 @@ from torchvision import models
 import timm.optim.optim_factory as optim_factory
 from collections import OrderedDict
 import sys
+from torchvision.models import densenet121, DenseNet121_Weights # pretrain : IMAGENET1K_V1
 
 def get_args_parser():
     parser = argparse.ArgumentParser('MAE fine-tuning for image classification', add_help=False)
-    parser.add_argument('--batch_size', default=64, type=int,
+    parser.add_argument('--batch_size', default=8, type=int,
                         help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
-    parser.add_argument('--epochs', default=75, type=int)
-    parser.add_argument('--accum_iter', default=1, type=int,
+    parser.add_argument('--epochs', default=80, type=int)
+    parser.add_argument('--accum_iter', default=4, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
-    parser.add_argument('--model', default='vit_small_patch16', type=str, metavar='MODEL',
+    parser.add_argument('--model', type=str, metavar='MODEL',
                         help='Name of model to train')
 
     parser.add_argument('--input_size', default=224, type=int,
                         help='images input size')
 
-    parser.add_argument('--drop_path', type=float, default=0, metavar='PCT',
+    parser.add_argument('--drop_path', type=float, metavar='PCT',
                         help='Drop path rate (default: 0.1)')
 
     # Optimizer parameters
@@ -64,10 +67,10 @@ def get_args_parser():
     parser.add_argument('--layer_decay', type=float, default=0.55,
                         help='layer-wise lr decay from ELECTRA/BEiT')
     # 1e-5, 1e-6, 1e-7 시도하기
-    parser.add_argument('--min_lr', type=float, default=1e-6, metavar='LR',
+    parser.add_argument('--min_lr', type=float, default=1e-5, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0')
 
-    parser.add_argument('--warmup_epochs', type=int, default=0, metavar='N',
+    parser.add_argument('--warmup_epochs', type=int, default=5, metavar='N',
                         help='epochs to warmup LR')
 
     # Augmentation parameters
@@ -103,7 +106,7 @@ def get_args_parser():
                         help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
 
     # * Finetuning params
-    parser.add_argument('--finetune', default='models/vit-s_CXR_0.3M_mae.pth',
+    parser.add_argument('--finetune',
                         help='finetune from checkpoint')
     parser.add_argument('--global_pool', action='store_true')
     parser.set_defaults(global_pool=True)
@@ -111,14 +114,14 @@ def get_args_parser():
                         help='Use class token instead of global pool for classification')
 
     # Dataset parameters
-    parser.add_argument('--data_path', default='data/DB_X-ray_rotated/', type=str,
+    parser.add_argument('--data_path', type=str,
                         help='dataset path')
     parser.add_argument('--nb_classes', default=2, type=int,
                         help='number of the classification types')
 
-    parser.add_argument('--output_dir', default='results/shoulder_mae/vit/',
+    parser.add_argument('--output_dir',
                         help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default='results/shoulder_mae/vit/',
+    parser.add_argument('--log_dir', 
                         help='path where to tensorboard log')
     parser.add_argument('--device', action='store_false', 
                         default=torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu'),
@@ -157,7 +160,7 @@ def get_args_parser():
     parser.add_argument("--aug_strategy", default='simclr_with_randrotation', type=str, help="strategy for data augmentation")
     parser.add_argument("--dataset", default='shoulderxray', type=str)
 
-    parser.add_argument('--repeated_aug', action='store_true', default=False)
+    parser.add_argument('--repeated_aug', action='store_false', default=True)
 
     parser.add_argument("--optimizer", default='adamw', type=str)
 
@@ -175,7 +178,7 @@ def get_args_parser():
 
     return parser
 
-def finetune_vit(args):
+def finetune(args):
     # misc.init_distributed_mode(args)
     if args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
@@ -243,39 +246,75 @@ def finetune_vit(args):
             drop_path_rate=args.drop_path,
             global_pool=args.global_pool,
         )
-    
+    elif 'densenet' in args.model :
+        model = models.__dict__[args.model](num_classes=args.nb_classes)
+
+        
     if args.finetune and not args.eval:
-        checkpoint = torch.load(args.finetune, map_location='cpu')
-
         print("Load pre-trained checkpoint from: %s" % args.finetune, file=writer)
-        checkpoint_model = checkpoint['model']
-        state_dict = model.state_dict()
-        for k in checkpoint_model.keys():
-            if k in state_dict:
-                if checkpoint_model[k].shape == state_dict[k].shape:
-                    state_dict[k] = checkpoint_model[k]
-                    print(f"Loaded Index: {k} from Saved Weights")
+        
+        if args.finetune=='imagenet':
+            model(DenseNet121_Weights).to(args.device)
+
+            # binary classification을 위한 model classifier(FC layer) 변경
+            num_ftrs = model.classifier.in_features
+            model.classifier = torch.nn.Linear(num_ftrs, 1, bias=True)
+        elif 'vit' in args.model:
+            checkpoint = torch.load(args.finetune, map_location='cpu')
+
+            checkpoint_model = checkpoint['model']
+            state_dict = model.state_dict()
+            for k in checkpoint_model.keys():
+                if k in state_dict:
+                    if checkpoint_model[k].shape == state_dict[k].shape:
+                        state_dict[k] = checkpoint_model[k]
+                        print(f"Loaded Index: {k} from Saved Weights")
+                    else:
+                        print(f"Shape of {k} doesn't match with {state_dict[k]}")
                 else:
-                    print(f"Shape of {k} doesn't match with {state_dict[k]}")
+                    print(f"{k} not found in Init Model")
+
+            # interpolate position embedding
+            # model의 input size/구조가 달라졌을 때 필요
+            interpolate_pos_embed(model, checkpoint_model)
+
+            # load pre-trained model
+            # strict=False : 완벽한 일치 아니어도 됨
+            msg = model.load_state_dict(checkpoint_model, strict=False)
+            print(msg)
+
+            # if args.global_pool:
+            #     assert set(msg.missing_keys) == {'head.weight', 'head.bias', 'fc_norm.weight', 'fc_norm.bias'}
+            # else:
+            #     assert set(msg.missing_keys) == {'head.weight', 'head.bias'}
+
+            # manually initialize fc layer
+            trunc_normal_(model.head.weight, std=2e-5)
+        elif 'densenet' in args.model:
+            checkpoint = torch.load(args.finetune, map_location='cpu')
+            
+            if 'state_dict' in checkpoint.keys():
+                checkpoint_model = checkpoint['state_dict']
+            elif 'model' in checkpoint.keys():
+                checkpoint_model = checkpoint['model']
             else:
-                print(f"{k} not found in Init Model")
+                checkpoint_model = checkpoint
+            if args.checkpoint_type == 'smp_encoder':
+                state_dict = checkpoint_model
 
-        # interpolate position embedding
-        # model의 input size/구조가 달라졌을 때 필요
-        interpolate_pos_embed(model, checkpoint_model)
+                new_state_dict = OrderedDict()
 
-        # load pre-trained model
-        # strict=False : 완벽한 일치 아니어도 됨
-        msg = model.load_state_dict(checkpoint_model, strict=False)
-        print(msg)
+                for key, value in state_dict.items():
+                    if 'model.encoder.' in key:
+                        new_key = key.replace('model.encoder.', '')
+                        new_state_dict[new_key] = value
+                checkpoint_model = new_state_dict
+            msg = model.load_state_dict(checkpoint_model, strict=False)
+            print(msg, file=writer)
 
-        # if args.global_pool:
-        #     assert set(msg.missing_keys) == {'head.weight', 'head.bias', 'fc_norm.weight', 'fc_norm.bias'}
-        # else:
-        #     assert set(msg.missing_keys) == {'head.weight', 'head.bias'}
-
-        # manually initialize fc layer
-        trunc_normal_(model.head.weight, std=2e-5)
+            # binary classification을 위한 model classifier(FC layer) 변경
+            num_ftrs = model.classifier.in_features
+            model.classifier = torch.nn.Linear(num_ftrs, 1, bias=True)
 
     model.to(args.device)
     model_without_ddp = model
@@ -317,7 +356,11 @@ def finetune_vit(args):
 
 #------------------------------- Training & Evaluation---------------------------------------------------
     if args.eval:
-        test_stats = evaluate_shoulderxray(data_loader_test, model, args.device, args)
+        if 'vit' in args.model:
+            test_stats = engine_finetune_vit.evaluate_shoulderxray(data_loader_test, model, args.device, args)
+        elif 'densenet' in args.model:
+            test_stats = engine_finetune_cnn.evaluate_shoulderxray(data_loader_test, model, args.device, args)
+
         print(f"Average AUC of the network on the test set images: {test_stats['auc_avg']:.4f}")
         print(f"Accuracy of the network on the test set images: {test_stats['acc1']:.4f}")
         exit(0)
@@ -329,13 +372,24 @@ def finetune_vit(args):
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)
-        train_stats = train_one_epoch(
-            model, criterion, data_loader_train,
-            optimizer, args.device, epoch, loss_scaler,
-            args.clip_grad, log_writer=log_writer, args=args)
+
+        if 'vit' in args.model:
+            train_stats = engine_finetune_vit.train_one_epoch(
+                model, criterion, data_loader_train,
+                optimizer, args.device, epoch, loss_scaler,
+                args.clip_grad, log_writer=log_writer, args=args)
+        elif 'densenet' in args.model:
+            train_stats = engine_finetune_cnn.train_one_epoch(
+                model, criterion, data_loader_train,
+                optimizer, args.device, epoch, loss_scaler,
+                args.clip_grad, log_writer=log_writer, args=args)
 
         if args.output_dir and (epoch % args.eval_interval == 0 or epoch + 1 == args.epochs):
-            val_stats = evaluate_shoulderxray(data_loader_val, model, args.device, args)
+            if 'vit' in args.model:
+                val_stats = engine_finetune_vit.evaluate_shoulderxray(data_loader_val, model, args.device, args)
+            elif 'densenet' in args.model:
+                val_stats = engine_finetune_cnn.evaluate_shoulderxray(data_loader_val, model, args.device, args)
+
             print(f"Average AUC on the val set images: {val_stats['auc_avg']:.4f}")
             print(f"Accuracy of the network on val images: {val_stats['acc1']:.1f}%")
             
@@ -360,24 +414,46 @@ def finetune_vit(args):
                 with open(os.path.join(args.log_dir, "score.txt"), mode="a", encoding="utf-8") as f:
                     f.write(json.dumps(log_stats) + "\n")
 
-
-
     checkpoint = torch.load(os.path.join(args.output_dir,'bestval_model.pth'), map_location='cpu')
 
-    checkpoint_model = checkpoint['model']
-    state_dict = model.state_dict()
-    for k in checkpoint_model.keys():
-        if k in state_dict:
-            if checkpoint_model[k].shape == state_dict[k].shape:
-                state_dict[k] = checkpoint_model[k]
-                print(f"Loaded Index: {k} from Saved Weights")
+    if 'vit' in args.model:
+        checkpoint_model = checkpoint['model']
+        state_dict = model.state_dict()
+        for k in checkpoint_model.keys():
+            if k in state_dict:
+                if checkpoint_model[k].shape == state_dict[k].shape:
+                    state_dict[k] = checkpoint_model[k]
+                    print(f"Loaded Index: {k} from Saved Weights")
+                else:
+                    print(f"Shape of {k} doesn't match with {state_dict[k]}")
             else:
-                print(f"Shape of {k} doesn't match with {state_dict[k]}")
+                print(f"{k} not found in Init Model")
+        model.load_state_dict(checkpoint_model, strict=False)
+    elif 'densenet' in args.model:        
+        if 'state_dict' in checkpoint.keys():
+            checkpoint_model = checkpoint['state_dict']
+        elif 'model' in checkpoint.keys():
+            checkpoint_model = checkpoint['model']
         else:
-            print(f"{k} not found in Init Model")
-    model.load_state_dict(checkpoint_model, strict=False)
+            checkpoint_model = checkpoint
+        
+        if args.checkpoint_type == 'smp_encoder':
+            state_dict = checkpoint_model
 
-    test_stats = evaluate_shoulderxray(data_loader_test, model, args.device, args)
+            new_state_dict = OrderedDict()
+
+            for key, value in state_dict.items():
+                if 'model.encoder.' in key:
+                    new_key = key.replace('model.encoder.', '')
+                    new_state_dict[new_key] = value
+            checkpoint_model = new_state_dict
+        model.load_state_dict(checkpoint_model, strict=False)
+
+    if 'vit' in args.model:
+        test_stats = engine_finetune_vit.evaluate_shoulderxray(data_loader_test, model, args.device, args)
+    elif 'densenet' in args.model:
+        test_stats = engine_finetune_cnn.evaluate_shoulderxray(data_loader_test, model, args.device, args)
+
     print(f"Average AUC on the test set images: {test_stats['auc_avg']:.4f}")
     print(f"Accuracy of the network on test images: {test_stats['acc1']:.1f}%")
     log_stats = {**{f'test_{k}': v for k, v in test_stats.items()},
@@ -405,4 +481,4 @@ if __name__ == '__main__':
     args = args.parse_args()
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-    finetune_vit(args)
+    finetune(args)
