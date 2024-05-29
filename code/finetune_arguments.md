@@ -20,7 +20,7 @@ python ./code/finetune_shoulderxray_cnn.py ^
 --build_timm_transform ^
 --aa 'rand-m6-mstd0.5-inc1'
 --repeated_aug ^
---finetune "models/densenet121_SHDR_center_1.4K_mae_800epc.pth"
+--finetune "models/densenet121_SHDR_1.4K_mae_center_heatmap_800epc.pth"
 ```
 
 # Finetuning(shoulder) - ViT-s
