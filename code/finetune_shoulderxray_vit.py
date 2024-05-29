@@ -111,7 +111,7 @@ def get_args_parser():
                         help='Use class token instead of global pool for classification')
 
     # Dataset parameters
-    parser.add_argument('--data_path', default='data/DB_X-ray/', type=str,
+    parser.add_argument('--data_path', default='data/DB_X-ray_rotated/', type=str,
                         help='dataset path')
     parser.add_argument('--nb_classes', default=2, type=int,
                         help='number of the classification types')
@@ -354,10 +354,10 @@ def finetune_vit(args):
                             'epoch': epoch,
                             'n_parameters': n_parameters}
 
-            if args.output_dir and misc.is_main_process():
+            if args.log_dir and misc.is_main_process():
                 if log_writer is not None:
                     log_writer.flush()
-                with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+                with open(os.path.join(args.log_dir, "score.txt"), mode="a", encoding="utf-8") as f:
                     f.write(json.dumps(log_stats) + "\n")
 
 

@@ -26,7 +26,7 @@ mixup_switch_prob=0.5,
 mixup_mode='batch',
 finetune='best_models/vis-s_SHDR_1.4K_mae_center_heatmap_800epc.pth',
 global_pool=True,
-data_path='data/DB_X-ray/',
+data_path='data/DB_X-ray_rotated/',
 nb_classes=2,
 output_dir='results/shoulder_mae/vitsmall/centercrop_heatmap/models/',
 log_dir='results/shoulder_mae/vitsmall/centercrop_heatmap/',
@@ -66,7 +66,7 @@ dataset::  Dataset ImageFolder
 Transform: Compose(
                RandomResizedCropAndInterpolation(size=(224, 224), scale=(0.08, 1.0), ratio=(0.75, 1.3333), interpolation=PIL.Image.BICUBIC)
                RandomHorizontalFlip(p=0.5)
-               <timm.data.auto_augment.RandAugment object at 0x0000020C23FF9780>
+               <timm.data.auto_augment.RandAugment object at 0x0000022645C797B0>
                ToTensor()
                Normalize(mean=tensor([0.5056, 0.5056, 0.5056]), std=tensor([0.2520, 0.2520, 0.2520]))
            )
@@ -306,3 +306,8 @@ Model = VisionTransformer(
   (head): Linear(in_features=384, out_features=2, bias=True)
   (fc_norm): LayerNorm((384,), eps=1e-06, elementwise_affine=True)
 )
+number of params (M): 21.67
+base lr: 2.50e-04
+actual lr: 3.13e-05
+accumulate grad iterations: 4
+effective batch size: 32

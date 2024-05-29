@@ -84,9 +84,9 @@ def get_args_parser():
     parser.add_argument('--data_path', default='data/DB_X-ray_rotated/train_to', type=str,
                         help='dataset path')
 
-    parser.add_argument('--output_dir', default='results/shoulder_mae/vitsmall/centercrop_heatmap',
+    parser.add_argument('--output_dir', default='results/shoulder_mae/vitsmall/centercrop_heatmap/models/',
                         help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default='results/shoulder_mae/vitsmall/centercrop_heatmap',
+    parser.add_argument('--log_dir', default='results/shoulder_mae/vitsmall/centercrop_heatmap/',
                         help='path where to tensorboard log')
     parser.add_argument('--device', action='store_false', 
                         default=torch.cuda.is_available(),
@@ -338,7 +338,7 @@ def main(args):
         if args.output_dir and misc.is_main_process():
             if log_writer is not None:
                 log_writer.flush()
-            with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+            with open(os.path.join(args.output_dir, "score.txt"), mode="a", encoding="utf-8") as f:
                 f.write(json.dumps(log_stats) + "\n")
 
     total_time = time.time() - start_time

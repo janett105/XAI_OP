@@ -20,11 +20,14 @@ python ./code/pretrain_shoulderxray_cnn.py ^
 ```
 # Pre-training(shoulder)/MAE - ViT-S
 ```
-set SAVE_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap
+set SAVE_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/models/
+set lOG_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/
+set DATASET_DIR=data/DB_X-ray_rotated/
 
 python ./code/pretrain_shoulderxray_vit.py ^
  --output_dir %SAVE_DIR% ^
- --log_dir %SAVE_DIR% ^
+ --log_dir %lOG_DIR% ^
+ --data_path %DATASET_DIR% ^
  --mask_ratio 0.90 ^
  --epochs 800 ^
  --warmup_epochs 40 ^
@@ -37,4 +40,5 @@ python ./code/pretrain_shoulderxray_vit.py ^
  --accum_iter 4 ^
  --mae_strategy heatmap_mask_boundingbox
 ```
+
 tensorboard --logdir=%SAVE_DIR%
