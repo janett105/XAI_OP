@@ -1,10 +1,10 @@
 # Pretraining(shoulder)/MAE : densenet 121
 ```
-set SAVE_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/models/
-set lOG_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/
+set SAVE_DIR=results/shoulder_mae/densenet121/centercrop_heatmap/models/
+set lOG_DIR=results/shoulder_mae/densenet121/centercrop_heatmap/
 set DATASET_DIR=data/DB_X-ray_rotated/
 
-python ./code/pretrain_shoulderxray_cnn.py ^
+python ./code/pretrain_shoulderxray.py ^
  --output_dir %SAVE_DIR% ^
  --log_dir %LOG_DIR% ^
  --data_path %DATASET_DIR% ^
@@ -19,7 +19,7 @@ set SAVE_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/models/
 set lOG_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/
 set DATASET_DIR=data/DB_X-ray_rotated/
 
-python ./code/pretrain_shoulderxray_vit.py ^
+python ./code/pretrain_shoulderxray.py ^
  --output_dir %SAVE_DIR% ^
  --log_dir %LOG_DIR% ^
  --data_path %DATASET_DIR% ^

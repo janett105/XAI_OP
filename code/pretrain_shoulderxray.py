@@ -23,8 +23,6 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 import timm
-
-assert timm.__version__ == "0.3.2"  # version check
 import timm.optim.optim_factory as optim_factory
 
 from util import misc as misc
@@ -123,9 +121,13 @@ def get_args_parser():
     parser.add_argument('--finetune', default='best_models/vit-s_CXR_0.3M_mae.pth',
                         help='finetune from checkpoint')
     parser.add_argument("--mae_strategy", default='heatmap_mask_boundingbox', type=str)
+    parser.add_argument("--checkpoint_type", default=None, type=str)
     return parser
 
 def main(args):
+    if 'vit' in args.model:
+        assert timm.__version__ == "0.3.2"  # version check
+
     misc.init_distributed_mode(args)
 
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
@@ -283,11 +285,10 @@ def main(args):
             # manually initialize fc layer
             # encoder의 마지막 layer는 바꿀 필요 X
             #trunc_normal_(model.head.weight, std=2e-5)
-    
     elif 'densenet' in args.model :
         model = MaskedAutoencoderCNN(checkpoint_type=args.checkpoint_type, img_size=args.input_size, patch_size=16, 
                                      model_arch='Unet', encoder_name='densenet121',
-                                    pretrained_path='models/densenet121_CXR_0.3M_mae.pth',
+                                    pretrained_path='best_models/densenet121_CXR_0.3M_mae.pth',
                                     mask_strategy=args.mask_strategy)
      
     model.to(args.device)
