@@ -31,6 +31,7 @@ from util import misc as misc
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
 from models import models_mae_vit as models_mae_vit
+from models.models_mae_cnn import MaskedAutoencoderCNN
 #from models.models_mae_cnn import MaskedAutoencoderCNN
 
 from engine_pretrain import train_one_epoch
@@ -89,7 +90,7 @@ def get_args_parser():
     parser.add_argument('--log_dir', default='results/shoulder_mae/vitsmall/centercrop_heatmap/',
                         help='path where to tensorboard log')
     parser.add_argument('--device', action='store_false', 
-                        default=torch.cuda.is_available(),
+                        default=torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu'),
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='',
@@ -130,11 +131,8 @@ def main(args):
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
     print("{}".format(args).replace(', ', ',\n'))
 
-    if args.device:
-        device = torch.device('cuda')
+    if args.device == torch.device('cuda'):
         cudnn.benchmark = True
-    else: device = torch.device('cpu')
-    print(f"device : {device}")
 
     # fix the seed for reproducibility
     seed = args.seed + misc.get_rank()
@@ -142,6 +140,7 @@ def main(args):
     np.random.seed(seed)
 
     cudnn.benchmark = True
+    print(f"device : {args.device}")
 
     # simple augmentation
 
@@ -215,21 +214,21 @@ def main(args):
     dataset_train = ShoulderXray(args.data_path, transform=transform_train, heatmap_path=heatmap_path)
     print(dataset_train)
 
-    if args.distributed:
-        num_tasks = misc.get_world_size()
-        global_rank = misc.get_rank()
-        if args.repeated_aug:
-            sampler_train = RASampler(
-                dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
-            )
-        else:
-            sampler_train = torch.utils.data.DistributedSampler(
-                dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
-            )
-        print("Sampler_train = %s" % str(sampler_train))
-    else:
-        global_rank=0
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
+    # if args.distributed:
+    #     num_tasks = misc.get_world_size()
+    #     global_rank = misc.get_rank()
+    #     if args.repeated_aug:
+    #         sampler_train = RASampler(
+    #             dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+    #         )
+    #     else:
+    #         sampler_train = torch.utils.data.DistributedSampler(
+    #             dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+    #         )
+        
+    global_rank=0
+    sampler_train = torch.utils.data.RandomSampler(dataset_train)
+    print("Sampler_train = %s" % str(sampler_train))
 
     if args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
@@ -246,45 +245,52 @@ def main(args):
         persistent_workers=True
     )
 
-    # define the model
-    model = models_mae_vit.__dict__[args.model](norm_pix_loss=args.norm_pix_loss, img_size=args.input_size, 
-                                                mask_strategy=args.mask_strategy)
-    if args.finetune:
-        checkpoint = torch.load(args.finetune, map_location='cpu')
+# ------------------------MODEL-----------------------------------------------------
+    if 'vit' in args.model :
+        model = models_mae_vit.__dict__[args.model](norm_pix_loss=args.norm_pix_loss, img_size=args.input_size, 
+                                                    mask_strategy=args.mask_strategy)
+        if args.finetune:
+            checkpoint = torch.load(args.finetune, map_location='cpu')
 
-        print("Load pre-trained checkpoint from: %s" % args.finetune)
-        checkpoint_model = checkpoint['model']
-        state_dict = model.state_dict()
-        for k in checkpoint_model.keys():
-            if k in state_dict:
-                if checkpoint_model[k].shape == state_dict[k].shape:
-                    state_dict[k] = checkpoint_model[k]
-                    print(f"Loaded Index: {k} from Saved Weights")
+            print("Load pre-trained checkpoint from: %s" % args.finetune)
+            checkpoint_model = checkpoint['model']
+            state_dict = model.state_dict()
+            for k in checkpoint_model.keys():
+                if k in state_dict:
+                    if checkpoint_model[k].shape == state_dict[k].shape:
+                        state_dict[k] = checkpoint_model[k]
+                        print(f"Loaded Index: {k} from Saved Weights")
+                    else:
+                        print(f'{k} 문제 \n 참조 모델 : {checkpoint_model[k].shape} \n 현재 모델 :{state_dict[k].shape}')
+                        #print(f"Shape of {k} doesn't match with {state_dict[k]}")
                 else:
-                    print(f'{k} 문제 \n 참조 모델 : {checkpoint_model[k].shape} \n 현재 모델 :{state_dict[k].shape}')
-                    #print(f"Shape of {k} doesn't match with {state_dict[k]}")
-            else:
-                print(f"{k} not found in Init Model")
+                    print(f"{k} not found in Init Model")
 
-        # interpolate position embedding
-        # model의 input size/구조가 달라졌을 때 필요
-        interpolate_pos_embed(model, checkpoint_model)
+            # interpolate position embedding
+            # model의 input size/구조가 달라졌을 때 필요
+            interpolate_pos_embed(model, checkpoint_model)
 
-        # load pre-trained model, decoder는 load X
-        # strict=False : 완벽한 일치 아니어도 됨
-        msg = model.load_state_dict(checkpoint_model, strict=False)
-        print(msg)
+            # load pre-trained model, decoder는 load X
+            # strict=False : 완벽한 일치 아니어도 됨
+            msg = model.load_state_dict(checkpoint_model, strict=False)
+            print(msg)
 
-        # if args.global_pool:
-        #     assert set(msg.missing_keys) == {'head.weight', 'head.bias', 'fc_norm.weight', 'fc_norm.bias'}
-        # else:
-        #     assert set(msg.missing_keys) == {'head.weight', 'head.bias'}
+            # if args.global_pool:
+            #     assert set(msg.missing_keys) == {'head.weight', 'head.bias', 'fc_norm.weight', 'fc_norm.bias'}
+            # else:
+            #     assert set(msg.missing_keys) == {'head.weight', 'head.bias'}
 
-        # manually initialize fc layer
-        # encoder의 마지막 layer는 바꿀 필요 X
-        #trunc_normal_(model.head.weight, std=2e-5)
+            # manually initialize fc layer
+            # encoder의 마지막 layer는 바꿀 필요 X
+            #trunc_normal_(model.head.weight, std=2e-5)
     
-    model.to(device)
+    elif 'densenet' in args.model :
+        model = MaskedAutoencoderCNN(checkpoint_type=args.checkpoint_type, img_size=args.input_size, patch_size=16, 
+                                     model_arch='Unet', encoder_name='densenet121',
+                                    pretrained_path='models/densenet121_CXR_0.3M_mae.pth',
+                                    mask_strategy=args.mask_strategy)
+     
+    model.to(args.device)
 
     model_without_ddp = model
     print("Model = %s" % str(model_without_ddp))
@@ -300,9 +306,9 @@ def main(args):
     print("accumulate grad iterations: %d" % args.accum_iter)
     print("effective batch size: %d" % eff_batch_size)
 
-    if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
-        model_without_ddp = model.module
+    # if args.distributed:
+    #     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
+    #     model_without_ddp = model.module
 
     # following timm: set wd as 0 for bias and norm layers
     try: 
@@ -323,7 +329,7 @@ def main(args):
             data_loader_train.sampler.set_epoch(epoch)
         train_stats = train_one_epoch(
             model, data_loader_train,
-            optimizer, device, epoch, loss_scaler,
+            optimizer, args.device, epoch, loss_scaler,
             log_writer=log_writer,
             args=args
         )

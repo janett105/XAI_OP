@@ -29,7 +29,9 @@ class MaskedAutoencoderCNN(nn.Module):
     """ Masked Autoencoder with VisionTransformer backbone
     """
 
-    def __init__(self, checkpoint_type, img_size=224, patch_size=16, model_arch='Unet', encoder_name='densenet121', pretrained_path=None):
+    def __init__(self, checkpoint_type, img_size=224, patch_size=16, 
+                 model_arch='Unet', encoder_name='densenet121', 
+                 pretrained_path=None, mask_strategy='random'):
         super().__init__()
         # --------------------------------------------------------------------------
         # MAE encoder specifics
@@ -49,7 +51,20 @@ class MaskedAutoencoderCNN(nn.Module):
 
         self.img_size = img_size
         self.patch_size = patch_size
-        
+
+    def patchify_heatmap(self, heatmaps, patch_size):
+        """
+        heatmaps batch를 받아서 (torch.Size([8, 224, 224]))
+        [8, 224,224] 확률 분포 heatmap -> patch로 나눠서 [8, 14, 14, 16, 16] 
+        patch 안의 값들은 sum -> [8, 14*14]
+        batch별로 각 값들은 확률분포를 따름
+        """
+        batch_size = heatmaps.shape[0]
+
+        heatmaps = heatmaps.unfold(1, patch_size, patch_size).unfold(2, patch_size, patch_size)
+        heatmaps = heatmaps.contiguous().view(batch_size, -1, patch_size*patch_size).sum(-1)
+        return heatmaps 
+
     def load_pretrained_weights(self, path, checkpoint_type):
         # Load pre-trained weights from a .pth file
         checkpoint = torch.load(path, map_location='cpu')
@@ -107,17 +122,23 @@ class MaskedAutoencoderCNN(nn.Module):
         Perform per-sample random masking by per-sample shuffling.
         Per-sample shuffling is done by argsort random noise.
         x: [N, L, D], sequence
-        32(batch, N), 224(L), 3(Dim) 
+        8(batch, N), 196(L), ?(Dim) 
         """
         x = self.patchify(imgs)
+        heatmaps = self.patchify_heatmap(heatmaps, self.patch_size) #[8 batch_size, 224, 224] -> [8 batch_size, 196 patch_num]
+        
         N, L, D = x.shape  # batch, length, dim
 
         len_keep = int(L * (1 - mask_ratio))
 
-        noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
-
-        # sort noise for each sample
-        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+        if heatmaps is not None:
+            # noise = torch.mul(torch.rand(N, L, device=x.device), heatmaps) # 중요한 patch(마스킹 되어야 하는 patch)일 수록 높은 값
+            noise = torch.multinomial(heatmaps, num_samples=L) # batch별로 heatmap 확률분포 따라 sampling
+            ids_shuffle = torch.flip(noise, dims=(1,))
+        else:
+            noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
+            ids_shuffle = torch.argsort(noise, dim=1, descending=False) # 모든 batch에 대해서, masking 확률 적은 patch 부터 index 정렬
+        
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
         # generate the binary mask: 0 is keep, 1 is remove
@@ -143,7 +164,11 @@ class MaskedAutoencoderCNN(nn.Module):
         return loss
 
     def forward(self, imgs, mask_ratio=0.75, heatmaps=None):
-        imgs_masked, mask, ids_restore = self.random_masking(imgs, mask_ratio)
+        if heatmaps is not None:
+            imgs_masked, mask, ids_restore = self.random_masking(imgs, mask_ratio, heatmaps)
+        else:
+            imgs_masked, mask, ids_restore = self.random_masking(imgs, mask_ratio)
+        
         pred = self.model(imgs_masked)
         loss = self.forward_loss(imgs, pred, mask)
         return loss, pred, mask

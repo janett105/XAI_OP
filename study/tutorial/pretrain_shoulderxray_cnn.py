@@ -118,20 +118,6 @@ def get_args_parser():
                         help='device to use for training / testing')
     parser.add_argument("--crop_ratio", default=0.8, type=float)
     return parser
-
-class CustomCrop:
-    def __init__(self, args, resize_ratio_min, resize_ratio_max):
-        self.crop_ratio = args.crop_ratio  # 이미지에서 잘라낼 비율
-        self.random_resized_crop = transforms.RandomResizedCrop(args.input_size, scale=(resize_ratio_min, resize_ratio_max),interpolation=3)  # 3 is bicubic
-
-    def __call__(self, img):
-        w, h = img.size
-        # 전체 이미지 중 원하는 비율만큼만 사용하여 crop할 부분을 정의
-        new_w, new_h = int(self.crop_ratio * w), int(self.crop_ratio * h)
-        # 이미지를 crop_ratio에 따라 잘라냅니다 (이 예에서는 중앙에서 잘라내기)
-        cropped_img = img.crop(((w - new_w) // 2, (h - new_h) // 2, (w + new_w) // 2, (h + new_h) // 2))
-        # RandomResizedCrop을 적용
-        return self.random_resized_crop(cropped_img)
     
 def main(args):
     misc.init_distributed_mode(args)
