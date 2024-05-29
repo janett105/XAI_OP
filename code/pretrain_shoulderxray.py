@@ -188,7 +188,9 @@ def main(args):
             args.mask_strategy = 'heatmap_weighted'
 
             if args.mae_strategy =='heatmap_mask_boundingbox': heatmap_path = 'data/DB_BBox/Bbox.npy'
-            elif args.mae_strategy =='random_mask_boundingbox':heatmap_path = 'data/DB_BBox/BboxLine.npy'
+            elif args.mae_strategy =='random_mask_boundingbox':
+                if 'vit' in args.model : heatmap_path = 'data/DB_BBox/BboxLine_2.2.npy'
+                elif 'densenet' in args.model : heatmap_path = 'data/DB_BBox/BboxLine_1.9.npy'
 
             transform_train = custom_train_transform(size=args.input_size, mean=dataset_mean, std=dataset_std)
 

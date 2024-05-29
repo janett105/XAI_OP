@@ -11,7 +11,7 @@ python ./code/pretrain_shoulderxray.py ^
  --model 'densenet121' ^
  --mask_ratio 0.75 ^
  --checkpoint_type "smp_encoder" ^
- --mae_strategy heatmap_mask_boundingbox
+ --mae_strategy random_mask_boundingbox
 ```
 # Pre-training(shoulder)/MAE - ViT-S
 ```
@@ -26,8 +26,10 @@ python ./code/pretrain_shoulderxray.py ^
  --mask_ratio 0.90 ^
  --model 'mae_vit_small_patch16_dec512d8b' ^
  --finetune 'best_models/vit-s_CXR_0.3M_mae.pth' ^
+ --mae_strategy random_mask_boundingbox
+```
+
  --mae_strategy heatmap_mask_boundingbox
-```s
 
 tensorboard --logdir=%SAVE_DIR%
 
