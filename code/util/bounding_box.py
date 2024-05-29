@@ -49,13 +49,13 @@ def createBBoxline(base_path):
     Bbox = np.load(base_path+'Bbox.npy')  
     Bbox_line = np.where(Bbox> 0, 1, 0)
     
-    # BoxPixels = np.where(Bbox_line==1)
-    # left = min(BoxPixels[0])
-    # right = max(BoxPixels[0])
-    # bottom = min(BoxPixels[1])
-    # top = max(BoxPixels[1])
+    BoxPixels = np.where(Bbox_line==1)
+    left = min(BoxPixels[0])
+    right = max(BoxPixels[0])
+    bottom = min(BoxPixels[1])
+    top = max(BoxPixels[1])
 
-    # Bbox_line[bottom:top, left:right] == 1
+    Bbox_line[bottom:top, left:right] == 1
 
     Bbox_line_img = Image.fromarray(np.where(Bbox_line>0, 255, 0)).convert('RGB')
     # np.save(base_path+'BboxLine.npy', Bbox_line)
@@ -64,5 +64,5 @@ def createBBoxline(base_path):
     return Bbox_line
 
 base_path = 'C:/Users/janet/MyProjects/XAI_OP/data/DB_BBox/'
-total_bbox = createBBox(base_path)
-# Bbox_line = createBBoxline(base_path)
+#total_bbox = createBBox(base_path)
+Bbox_line = createBBoxline(base_path)
