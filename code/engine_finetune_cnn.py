@@ -54,8 +54,12 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             # print(outputs.shape, targets.shape, torch.unique(targets))' 
             if last_activation is not None:
                 outputs = last_activation(outputs)
-            targets=targets.float().unsqueeze(1)
-            loss = criterion(outputs, targets)
+
+            if args.smoothing > 0.: # smoothing -> target size [8]
+                loss = criterion(outputs, targets)
+            else:# target size [8,1]
+                targets = targets.unsqueeze(1).float()
+                loss = criterion(outputs, targets)
 
         loss_value = loss.item()
 
