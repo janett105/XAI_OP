@@ -608,3 +608,8 @@ Model = DenseNet(
   )
   (classifier): Linear(in_features=1024, out_features=1, bias=True)
 )
+number of params (M): 6.95
+base lr: 2.50e-04
+actual lr: 3.13e-05
+accumulate grad iterations: 4
+effective batch size: 32
