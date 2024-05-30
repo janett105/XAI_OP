@@ -12,7 +12,7 @@ python ./code/finetune_shoulderxray.py ^
 --checkpoint_type "smp_encoder" ^
 --drop_path 0 ^
 --smoothing 0 ^
---finetune "models/densenet121_SHDR_1.4K_mae_heatmap_800epc.pth"
+--finetune "models/densenet121_SHDR_1.4K_mae_center_heatmap_800epc.pth"
 ```
 
 # Finetuning(shoulder) - ViT-s
@@ -29,7 +29,7 @@ python ./code/finetune_shoulderxray.py ^
 --layer_decay 0.55 ^
 --drop_path 0.2 ^
 --smoothing 0.1 ^
---finetune "models/vis-s_SHDR_1.4K_mae_random_bbox_800epc.pth"
+--finetune "models/vis-s_SHDR_1.4K_mae_center_heatmap_800epc.pth"
 ```
 
 --mixup 0 --cutmix 0 --reprob 0 --vit_dropout_rate 0 ^
