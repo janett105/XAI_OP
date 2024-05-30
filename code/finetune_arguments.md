@@ -1,17 +1,18 @@
 # Finetuning(shoulder) : densenet 121
 ```
-set SAVE_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/models/
-set lOG_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/
+set SAVE_DIR=results/shoulder_mae/densenet121/centercrop_heatmap/models/
+set lOG_DIR=results/shoulder_mae/densenet121/centercrop_heatmap/
 set DATASET_DIR=data/DB_X-ray_rotated/
 
-python ./code/finetune_shoulderxray_cnn.py ^
+python ./code/finetune_shoulderxray.py ^
 --output_dir %SAVE_DIR% ^
 --log_dir %SAVE_DIR% ^
 --data_path %DATASET_DIR% ^
 --model densenet121 ^
 --checkpoint_type "smp_encoder" ^
---drop_path 0 
---finetune "best_models/densenet121_SHDR_1.4K_mae_center_heatmap_800epc.pth"
+--drop_path 0 ^
+--smoothing 0 ^
+--finetune "models/densenet121_SHDR_1.4K_mae_heatmap_800epc.pth"
 ```
 
 # Finetuning(shoulder) - ViT-s
@@ -27,7 +28,8 @@ python ./code/finetune_shoulderxray.py ^
 --model vit_small_patch16 ^
 --layer_decay 0.55 ^
 --drop_path 0.2 ^
---finetune "best_models/vis-s_SHDR_1.4K_mae_random_bbox_800epc.pth"
+--smoothing 0.1 ^
+--finetune "models/vis-s_SHDR_1.4K_mae_center_heatmap_800epc.pth"
 ```
 
 --mixup 0 --cutmix 0 --reprob 0 --vit_dropout_rate 0 ^
