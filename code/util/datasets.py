@@ -71,7 +71,7 @@ def build_dataset_shoulder_xray(split, args, logger=None):
         #     transform = Augmentation(normalize="chestx-ray").get_augmentation("full_224", "val")
 
     if args.dataset == 'shoulderxray':
-        dataset = datasets.ImageFolder(root=f'data/DB_X-ray/{mode}_to', transform=transform)
+        dataset = datasets.ImageFolder(root=f'{args.data_path}{mode}_to', transform=transform)
         
         print("dataset:: ", dataset, file=logger)
         return dataset
