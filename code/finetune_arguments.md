@@ -16,9 +16,9 @@ python ./code/finetune_shoulderxray.py ^
 ```
 
 # Finetuning(shoulder) - ViT-s
-```
-set SAVE_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/models/
-set lOG_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/
+
+set SAVE_DIR=results/shoulder_mae/vitsmall/random_boundingbox/models/
+set lOG_DIR=results/shoulder_mae/vitsmall/random_boundingbox/
 set DATASET_DIR=data/DB_X-ray_rotated/
 
 python ./code/finetune_shoulderxray.py ^
