@@ -25,8 +25,8 @@ python ./code/finetune_shoulderxray_cnn.py ^
 
 # Finetuning(shoulder) - ViT-s
 
-set SAVE_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/models/
-set lOG_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/
+set SAVE_DIR=results/shoulder_mae/vitsmall/random_boundingbox/models/
+set lOG_DIR=results/shoulder_mae/vitsmall/random_boundingbox/
 set DATASET_DIR=data/DB_X-ray_rotated/
 
 python ./code/finetune_shoulderxray_vit.py ^
@@ -44,4 +44,4 @@ python ./code/finetune_shoulderxray_vit.py ^
 --num_workers 4 ^
 --aa rand-m6-mstd0.5-inc1 ^
 --build_timm_transform ^
---finetune "best_models/vis-s_SHDR_1.4K_mae_center_heatmap_800epc.pth"
+--finetune "best_models/vis-s_SHDR_1.4K_mae_random_bbox_800epc.pth"

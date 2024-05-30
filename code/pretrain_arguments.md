@@ -1,7 +1,7 @@
 # Pretraining(shoulder)/MAE : densenet 121
 ```
-set SAVE_DIR=results/shoulder_mae/densenet121/centercrop_heatmap/models/
-set lOG_DIR=results/shoulder_mae/densenet121/centercrop_heatmap/
+set SAVE_DIR=results/shoulder_mae/densenet121/random_boundingbox/models/
+set lOG_DIR=results/shoulder_mae/densenet121/random_boundingbox/
 set DATASET_DIR=data/DB_X-ray_rotated/
 
 python ./code/pretrain_shoulderxray.py ^
@@ -15,8 +15,8 @@ python ./code/pretrain_shoulderxray.py ^
 ```
 # Pre-training(shoulder)/MAE - ViT-S
 ```
-set SAVE_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/models/
-set lOG_DIR=results/shoulder_mae/vitsmall/centercrop_heatmap/
+set SAVE_DIR=results/shoulder_mae/vitsmall/random_boundingbox/models/
+set lOG_DIR=results/shoulder_mae/vitsmall/random_boundingbox/
 set DATASET_DIR=data/DB_X-ray_rotated/
 
 python ./code/pretrain_shoulderxray.py ^
@@ -24,8 +24,9 @@ python ./code/pretrain_shoulderxray.py ^
  --log_dir %LOG_DIR% ^
  --data_path %DATASET_DIR% ^
  --mask_ratio 0.90 ^
- --model 'mae_vit_small_patch16_dec512d8b' ^
- --finetune 'best_models/vit-s_CXR_0.3M_mae.pth' ^
+ --model mae_vit_small_patch16_dec512d8b ^
+
+ --finetune best_models/vit-s_CXR_0.3M_mae.pth ^
  --mae_strategy random_mask_boundingbox
 ```
 
