@@ -45,13 +45,13 @@ def get_args_parser():
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
-    parser.add_argument('--model', type=str, metavar='MODEL',
+    parser.add_argument('--model', default = 'densenet121', type=str, metavar='MODEL',
                         help='Name of model to train')
 
     parser.add_argument('--input_size', default=224, type=int,
                         help='images input size')
 
-    parser.add_argument('--drop_path', type=float, metavar='PCT',
+    parser.add_argument('--drop_path', type=float, default = 0, metavar='PCT',
                         help='Drop path rate (default: 0.1)')
 
     # Optimizer parameters
@@ -78,7 +78,7 @@ def get_args_parser():
                         help='Color jitter factor (enabled only when not using Auto/RandAug)')
     parser.add_argument('--aa', type=str, default='rand-m6-mstd0.5-inc1', metavar='NAME',
                         help='Use AutoAugment policy. "v0" or "original". " + "(default: rand-m9-mstd0.5-inc1)'),
-    parser.add_argument('--smoothing', type=float, default=0.1,
+    parser.add_argument('--smoothing', type=float, default=0,
                         help='Label smoothing (default: 0.1)')
 
     # * Random Erase params
@@ -106,7 +106,7 @@ def get_args_parser():
                         help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
 
     # * Finetuning params
-    parser.add_argument('--finetune',
+    parser.add_argument('--finetune', default = "models/densenet121_SHDR_1.4K_mae_heatmap_800epc.pth",
                         help='finetune from checkpoint')
     parser.add_argument('--global_pool', action='store_true')
     parser.set_defaults(global_pool=True)
@@ -114,14 +114,14 @@ def get_args_parser():
                         help='Use class token instead of global pool for classification')
 
     # Dataset parameters
-    parser.add_argument('--data_path', type=str,
+    parser.add_argument('--data_path', default='data/DB_X-ray_rotated/',type=str,
                         help='dataset path')
     parser.add_argument('--nb_classes', default=2, type=int,
                         help='number of the classification types')
 
-    parser.add_argument('--output_dir',
-                        help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', 
+    parser.add_argument('--output_dir', default='results/shoulder_mae/densenet121/centercrop_heatmap/models/'
+                        ,help='path where to save, empty for no saving')
+    parser.add_argument('--log_dir', default='results/shoulder_mae/densenet121/centercrop_heatmap/',
                         help='path where to tensorboard log')
     parser.add_argument('--device', action='store_false', 
                         default=torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu'),
@@ -172,7 +172,7 @@ def get_args_parser():
 
     parser.add_argument("--norm_stats", default=None, type=str)
 
-    parser.add_argument("--checkpoint_type", default=None, type=str)
+    parser.add_argument("--checkpoint_type", default="smp_encoder", type=str)
 
     parser.add_argument("--distributed", default=False, type=bool)
 
@@ -327,9 +327,13 @@ def finetune(args):
         args.lr = args.blr * eff_batch_size / 256
 
     # build optimizer with layer-wise lr decay (lrd)
-    param_groups = lrd.param_groups_lrd(model_without_ddp, args.weight_decay,
-            no_weight_decay_list=model_without_ddp.no_weight_decay(),
-            layer_decay=args.layer_decay)
+    if 'vit' in args.model:
+        param_groups = lrd.param_groups_lrd(model_without_ddp, args.weight_decay,
+                no_weight_decay_list=model_without_ddp.no_weight_decay(),
+                layer_decay=args.layer_decay)
+    elif 'densenet' in args.model:
+        param_groups = optim_factory.param_groups_weight_decay(model_without_ddp, args.weight_decay)
+    
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
     loss_scaler = NativeScaler()
 
