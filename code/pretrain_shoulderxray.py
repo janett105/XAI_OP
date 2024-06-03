@@ -290,7 +290,7 @@ def main(args):
     elif 'densenet' in args.model :
         model = MaskedAutoencoderCNN(checkpoint_type=args.checkpoint_type, img_size=args.input_size, patch_size=16, 
                                      model_arch='Unet', encoder_name='densenet121',
-                                    pretrained_path='best_models/densenet121_CXR_0.3M_mae.pth',
+                                    pretrained_path='models/densenet121_CXR_0.3M_mae.pth',
                                     mask_strategy=args.mask_strategy)
      
     model.to(args.device)
