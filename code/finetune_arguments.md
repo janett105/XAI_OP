@@ -10,8 +10,8 @@ python ./code/finetune_shoulderxray.py ^
 --data_path %DATASET_DIR% ^
 --model densenet121 ^
 --checkpoint_type "smp_encoder" ^
---drop_path 0 
---finetune "best_models/densenet121_SHDR_1.4K_mae_random_800epc.pth"
+--drop_path 0 ^
+--finetune "models/densenet121_SHDR_1.4K_mae_random_800epc.pth"
 ```
 
 # Finetuning(shoulder) - ViT-s
