@@ -11,7 +11,7 @@ python ./code/finetune_shoulderxray.py ^
 --model densenet121 ^
 --checkpoint_type "smp_encoder" ^
 --drop_path 0 ^
---finetune "models/densenet121_SHDR_1.4K_mae_random_800epc.pth"
+--finetune "models/densenet121-ImageNet_Categorization.pth"
 ```
 
 # Finetuning(shoulder) - ViT-s
